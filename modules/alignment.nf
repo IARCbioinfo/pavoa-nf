@@ -40,7 +40,7 @@ process fastq_alignment {
     script:
     // Check if alt reference exists
     alt_aware = indexes.find { it.name.endsWith('.alt') }
-    postaltjs_path = params.postaltjs ? params.postaltjs : "/opt/conda/envs/alignment-nf/share/bwakit-0.7.15-1/bwa-postalt.js"
+    postaltjs_path = params.postaltjs ? params.postaltjs : "/opt/bwa-postalt.js"
     //postaltjs_path = "/opt/bwa-postalt.js"
     postalt = alt_aware ? 'k8 '+ postaltjs_path + ' ' + ref.name + '.alt' + ' | ' : ''
     

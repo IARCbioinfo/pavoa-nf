@@ -40,9 +40,6 @@ process MERGE_BAM {
         
         """
         sambamba merge -t ${merge_threads} -l 0 /dev/stdout ${bam_files} | \\
-        sambamba view -h /dev/stdin | \\
-        ${addMateTags} \\
-        sambamba view -S -f bam -l 0 /dev/stdin | \\
         sambamba sort -t ${sort_threads} -m ${sort_mem}G --tmpdir=${file_tag}_tmp -o ${file_tag_new}.bam /dev/stdin
         """
     } else {

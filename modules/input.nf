@@ -171,6 +171,8 @@ workflow PREPARE_INPUT_FROM_TSV {
     reads = VALIDATE_INPUT_FILES.out.validated_files
 }
 
+
+
 workflow PREPARE_INPUT_FROM_FOLDER {
     take:
     input_folder_path  // path: Folder containing FASTQ files

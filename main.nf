@@ -42,7 +42,7 @@ params.suffix1             = "_1"
 params.suffix2             = "_2"
     
 // Known sites
-params.known_sites         = "dbsnp.vcf"
+params.known_sites         = []
 params.mask                = null
     
 // Tool options
@@ -202,10 +202,10 @@ Plateform          : ${params.pl}
 fastq_ext          : ${params.fastq_ext}
 suffix1            : ${params.suffix1}
 suffix2            : ${params.suffix2}
-annovarDBlist      : ${params.annovarDBlist}"
-annovarDBpath      : ${params.annovarDBpath}"
-annovarBinPath     : ${params.annovarBinPath}"
-pass               : ${params.pass}"
+annovarDBlist      : ${params.annovarDBlist}
+annovarDBpath      : ${params.annovarDBpath}
+annovarBinPath     : ${params.annovarBinPath}
+pass               : ${params.pass}
 
 ========================================================================
     Workflow started at: ${new Date().format('yyyy-MM-dd HH:mm:ss')}
