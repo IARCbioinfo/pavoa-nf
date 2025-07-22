@@ -179,8 +179,8 @@ process dupCallerCallAll{
         def germline = known_sites.findAll { it.name.endsWith('.vcf.gz') }.collect { "-g ${it}" }.join(' ')
         def noise_mask = (bed.baseName=="NO_BED") ? "" : "-m " + bed.join(" -m ")
         """
-        DupCaller.py call -tt 30 -b $bamT -n $bamN -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask -r chr21
-        DupCaller.py estimate -i ${file_tag} -f $ref -r chr21
+        DupCaller.py call -tt 30 -b $bamT -n $bamN -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask
+        DupCaller.py estimate -i ${file_tag} -f $ref
         """
 
     stub:
