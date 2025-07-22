@@ -21,7 +21,7 @@ nextflow.enable.dsl = 2
 // Input/Output
 params.input_folder        = null
 params.input_file          = null
-params.output_folder       = "bam_" + new Date().format('yyyyMMdd')
+params.output_folder       = "pavoa_" + new Date().format('yyyyMMdd')
 
 // Reference genome
 params.ref                 = null
