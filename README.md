@@ -4,8 +4,6 @@
 
 ## Pipeline for variant detection: Preprocessing, Alignment, Variant calling, Optimization, Annotation
 
-[![Nextflow](https://img.shields.io/badge/nextflow-%E2%89%A50.32.0-brightgreen.svg)](https://www.nextflow.io/)
-
 ## Description
 
 pavoa-nf is a comprehensive Nextflow pipeline for variant detection from whole genome or whole exome sequencing data. The pipeline performs preprocessing, alignment, variant calling, optimization, and annotation steps to produce high-quality variant calls with comprehensive annotations.
@@ -14,36 +12,38 @@ The pipeline integrates industry-standard tools and follows GATK best practices 
 
 ## Dependencies
 
-Singularity containers are available with all the tools needed to run the pipeline (see nextflow.config and Usage section)
+Containers are available with all the tools needed to run the pipeline (see nextflow.config and Usage section). Only Annovar require a local installation.
 
 1. This pipeline is based on [nextflow](https://www.nextflow.io). As we have several nextflow pipelines, we have centralized the common information in the [IARC-nf](https://github.com/IARCbioinfo/IARC-nf) repository. Please read it carefully as it contains essential information for the installation, basic usage and configuration of nextflow and our pipelines.
 
 2. External software:
-   - [Trim-galore](https://github.com/FelixKrueger/TrimGalore) 
+   - [Trim-galore](https://github.com/FelixKrueger/TrimGalore) read trimming 
    - [bwa-mem2](https://github.com/bwa-mem2/bwa-mem2) fast alignment
    - [samblaster](https://github.com/GregoryFaust/samblaster) fast and flexible program for marking duplicates
    - [sambamba](https://github.com/lomereiter/sambamba) fast processing of NGS alignment 
    - [GATK4](https://software.broadinstitute.org/gatk/guide/quickstart) GATK tools : MarkDuplicates, BaseRecalibrator
-   - [Dupcaller](https://github.com/AlexandrovLab/DupCaller) Caller
+   - [Dupcaller](https://github.com/AlexandrovLab/DupCaller) UMI trimming and Caller for UDseq
    - [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) read quality assessment
    - [Qualimap](http://qualimap.conesalab.org/) alignment quality control
    - [MultiQC](https://multiqc.info/) quality control reports
-   - [Annovar](http://annovar.openbioinformatics.org/en/latest/user-guide/download/)
+   - [Annovar](http://annovar.openbioinformatics.org/en/latest/user-guide/download/) Variant annotation
 
 3. Optional external software for advanced features:
    - the k8 javascript execution shell (e.g., available in the [bwakit](https://sourceforge.net/projects/bio-bwa/files/bwakit/) archive); must be in the PATH
    - javascript bwa-postalt.js and the additional fasta reference .alt file from [bwakit](https://github.com/lh3/bwa/tree/master/bwakit) must be in the same directory as the reference genome file (for alternative contig handling)
 
 4. Reference files:
-   - You can generate indexes for bwa-mem2, GATK and dupcaller, stored with the reference fasta file. Or you can let pavoa-nf generate them for you.
+   - You can generate indexes for bwa-mem2, GATK and dupcaller, and store them with the reference fasta file. 
+   - Or you can let pavoa-nf generate them for you. They will be available in the output folder.
 
 5. VCF files :
-   - Lists of indels and SNVs (recommended: Mills gold standard indels VCFs, dbsnp VCF), and corresponding tabix indexes (.tbi)
+   - Lists of indels and SNVs, vcf files and corresponding tabix indexes (.tbi)
+   - Recommended: af-only-gnomad.hg38.vcf.gz, Mills_and_1000G_gold_standard.indels.hg38.vcf.gz.
 
 
 ## Parameters
 
-### Mandatory Paramters
+### Mandatory Parameters
 
 #### Inputs
 
