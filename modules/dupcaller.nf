@@ -65,7 +65,7 @@ process dupCallerCall{
     tag "${file_tag}_${chromosome}"
     label 'dupcaller'
 
-    memory params.mem+'GB'
+    memory params.mem +'GB'
     cpus params.cpu
     maxForks 15
 
@@ -158,8 +158,8 @@ process dupCallerCallAll{
     tag "${file_tag}"
     label 'dupcaller'
 
-    memory params.mem+'GB'
-    cpus params.cpu
+    memory params.mem_dupcaller +'GB'
+    cpus params.cpu_dupcaller
 
     publishDir "${params.output_folder}/dupcaller/", mode: 'copy'
 

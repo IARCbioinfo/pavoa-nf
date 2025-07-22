@@ -32,6 +32,8 @@ params.cpu                 = 8
 params.mem                 = 32
 params.cpu_bqsr            = 2
 params.mem_bqsr            = 10
+params.cpu_dupcaller       = 64
+params.mem_dupcaller       = 32
     
 // Params when using folder input
 params.lane                = "L001"
