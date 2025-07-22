@@ -105,7 +105,7 @@ If a .alt index is provided, the pipeline automatically runs bwa-postalt.js to a
 | --feature_file | Feature file (bed) for Qualimap |
 | --multiqc_config | MultiQC configuration file |
 
-### Known Sites and Masking:
+### Known Sites and Masking
 
 | Name | Description |
 |------|-------------|
