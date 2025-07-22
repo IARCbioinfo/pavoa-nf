@@ -238,7 +238,6 @@ workflow DUPCALLER_CALL{
     pairs
     ref
     indexes
-    chromosome
     known_sites
     noise_mask
 
