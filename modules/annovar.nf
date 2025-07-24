@@ -18,6 +18,7 @@ process annovar_annot {
         tuple val(file_tag), path(vcf)
         path annovar
         path annovarDB
+        path annovarDBlist
 
     output:
         tuple val(file_tag), path("*avinput"), path("*multianno.txt"), path("*multianno.vcf"), emit: annotated
@@ -25,7 +26,7 @@ process annovar_annot {
     shell:
         """
         annovar_annot.r -i ${vcf} -t ${params.cpu} -p "${params.pass}" \\
-                -l ${params.annovarDBlist} -a ${annovarDB} -b ${annovar}
+                -l ${annovarDBlist} -a ${annovarDB} -b ${annovar}
         for file in *multianno*; do
             mv \$file \${file/.vcf.gz/}
         done
@@ -76,8 +77,9 @@ workflow ANNOTATION{
     main:
     def annovar = file( params.annovarBinPath )
     def annovarDB = file( params.annovarDBpath )
+    def annovarDBlist = file( params.annovarDBlist )
 
-    annovar_annot(vcfs,annovar,annovarDB)
+    annovar_annot(vcfs,annovar,annovarDB,annovarDBlist)
     gama_annot(annovar_annot.out.annotated,annovarDB)
 
     emit:

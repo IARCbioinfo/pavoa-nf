@@ -135,7 +135,7 @@ nextflow run iarcbioinfo/pavoa-nf -profile singularity --input_file input.txt --
 For a complete variant calling workflow with preprocessing, alignment, variant calling, and annotation:
 
 ```bash
-nextflow run iarcbioinfo/pavoa-nf -profile singularity \
+nextflow run iarcbioinfo/pavoa-nf -profile apptainer \
   --input_file input.txt \
   --ref hg38.fasta \
   --trim \
@@ -148,13 +148,24 @@ nextflow run iarcbioinfo/pavoa-nf -profile singularity \
 For dual index sequencing (UDseq)
 
 ```bash
-nextflow run iarcbioinfo/pavoa-nf -profile singularity \
+nextflow run iarcbioinfo/pavoa-nf -profile apptainer \
   --input_file input.txt \
   --ref hg38.fasta \
   --trim \
   --umi \
   --known_sites dbsnp_138.hg38.vcf.gz \
   --known_sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
+  --annovarDBlist hg38_listAVDB.txt
+```
+
+### Run only calling
+
+The pair.txt file is a tabular file with three columns : SD (sample ID), normal (BAM file path), tumor (BAM file path).
+
+```bash
+nextflow run IARCbioinfo/pavoa-nf -entry dupcaller -profile apptainer \
+  --input_file pairs.txt \
+  --ref hg38.fasta \
   --annovarDBlist hg38_listAVDB.txt
 ```
 

@@ -10,6 +10,8 @@ process trim_galore{
   tag "$file_tag"
   label 'trimgalore'
 
+  cpus params.cpu
+
   publishDir "${params.output_folder}/QC/fastq/", mode: 'copy', pattern: '*.html,*.txt,*.zip'
 
   input:
@@ -22,7 +24,7 @@ process trim_galore{
 
   script:
   """
-  trim_galore --${params.adapter} --quality ${params.quality} --length ${params.length} --fastqc --paired "$pair1" "$pair2" -o .
+  trim_galore --cores ${task.cpus} --${params.adapter} --quality ${params.quality} --length ${params.length} --fastqc --paired "$pair1" "$pair2" -o .
   mv ${file_tag}_1_val_1.fq.gz ${file_tag}_trimmed_R1.fastq.gz
   mv ${file_tag}_2_val_2.fq.gz ${file_tag}_trimmed_R2.fastq.gz
   mv ${file_tag}_1_val_1_fastqc.zip ${file_tag}_R1_fastqc.zip
