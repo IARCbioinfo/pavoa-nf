@@ -337,7 +337,7 @@ workflow {
     // pairs.view()
     // Call variants using DUPCALLER
     chromosome = get_chromosomes(ref,indexes).splitText().collect{ it.trim() }
-    DUPCALLER_CALL(pairs, ref, indexes, chromosome, known_sites, mask)
+    DUPCALLER_CALL(pairs, ref, indexes, known_sites, mask)
     vcfs = DUPCALLER_CALL.out.vcfs
 
     // Annotate VCF files
