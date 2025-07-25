@@ -72,7 +72,10 @@ params.annovarDBlist  = null
 params.annovarDBpath  = "/data/databases/annovar/hg38db/"
 params.annovarBinPath = "~/bin/annovar/"
 params.pass = "'PASS'"
-    
+
+// Caller
+params.chromosome = null // Chromosome to process, if not set all chromosomes will be processed
+
 // Help message
 params.help                = false
 
@@ -412,12 +415,23 @@ workflow dupcaller{
 
     // pairs.view()
     // Call variants using DUPCALLER
-    DUPCALLER_CALL(pairs, ref, indexes, known_sites, mask)
+    DUPCALLER_CALL(pairs, ref, indexes)
     vcfs = DUPCALLER_CALL.out.vcfs
 
     // Annotate VCF files
     if(params.annovarDBlist){
-        ANNOTATION(vcfs)
+        filtered_vcf = ANNOTATION(vcfs)
+
+        // Prepare input for DUPCALLER_ESTIMATE
+        sit = filtered_vcf.concat(DUPCALLER_CALL.out.trinuc).groupTuple(by: 0).map { sample_id, vcf_files ->
+            def snv_vcf = vcf_files.find { it.name.endsWith('_snv.vcf') }
+            def indel_vcf = vcf_files.find { it.name.endsWith('_indel.vcf') }
+            def trinuc_file = vcf_files.find { it.name.contains('trinuc') }
+            tuple(sample_id, snv_vcf, indel_vcf, trinuc_file)
+        }.view()
+
+        // Restimate duplication rates using DUPCALLER_ESTIMATE after filtering
+        DUPCALLER_ESTIMATE(sit, ref, indexes, known_sites)
     }
 
 }

@@ -1,0 +1,20 @@
+name: gama
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - bioconductor-biostrings
+  - python=3.13.5
+  - r-assertthat
+  - r-base
+  - r-r.utils
+  - r-data.table
+  - r-tidyverse 
+  - r-dplyr
+  - r-getoptlong
+  - r-ggplot2
+  - r-rcolorbrewer
+  - r-readr
+  - r-stringr
+  - r-tidyr
+  - bedtools

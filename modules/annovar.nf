@@ -55,7 +55,7 @@ process gama_annot {
         path annovarDB
 
     output:
-        tuple val(file_tag), file("*1.tsv"), emit: annotated
+        tuple val(file_tag), path("*1.tsv"), path(vcf), emit: annotated
 
     shell:
         """
@@ -68,6 +68,33 @@ process gama_annot {
         """   
 }
 
+process filter_vcf {
+
+    tag "${file_tag}"
+    label 'annotation'
+
+    memory = params.mem+'.GB'
+    cpus params.cpu
+
+    publishDir "${params.output_folder}/filtered/${file_tag}/", mode: 'copy'
+
+    input:
+        tuple val(file_tag), path(tsv), path(vcf)
+
+    output:
+        tuple val(file_tag), path("${file_tag}/*vcf"), emit: filtered_vcf
+
+    shell:
+        """
+        gama_filter.r $file_tag
+        """
+
+    stub:
+        """
+        mkdir -p ${file_tag}
+        touch "${file_tag}/${file_tag}_snv.vcf"
+        """
+}
 
 workflow ANNOTATION{
 
@@ -81,8 +108,10 @@ workflow ANNOTATION{
 
     annovar_annot(vcfs,annovar,annovarDB,annovarDBlist)
     gama_annot(annovar_annot.out.annotated,annovarDB)
+    filter_vcf(gama_annot.out.annotated)
 
     emit:
-    annotated_tsv = gama_annot.out.annotated   
+    annotated_tsv = filter_vcf.out.filtered_vcf
+
 
 }

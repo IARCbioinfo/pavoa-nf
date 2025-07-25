@@ -173,14 +173,16 @@ process dupCallerCallAll{
     output:
         tuple val(file_tag), path("${file_tag}*/${file_tag}_snv.vcf"), emit : snvs
         tuple val(file_tag), path("${file_tag}*/${file_tag}_indel.vcf"), emit : indels
+        tuple val(file_tag), path("${file_tag}*/*trinuc*"), emit: trinuc
         path("${file_tag}*/*")
 
     script:
         def germline = known_sites.findAll { it.name.endsWith('.vcf.gz') }.collect { "-g ${it}" }.join(' ')
         def noise_mask = (bed.baseName=="NO_BED") ? "" : "-m " + bed.join(" -m ")
+        def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
         """
-        DupCaller.py call -tt 30 -b $bamT -n $bamN -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask
-        DupCaller.py estimate -i ${file_tag} -f $ref
+        DupCaller.py call -tt 30 -b $bamT -n $bamN -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask ${chromosome}
+        DupCaller.py estimate -i ${file_tag} -f $ref ${chromosome}
         """
 
     stub:
@@ -204,7 +206,7 @@ process fixDupcallerOutput{
     memory params.mem+'GB'
     cpus params.cpu
 
-    publishDir "${params.output_folder}/VCF", mode: 'copy', pattern: '{*vcf.gz}' 
+    //publishDir "${params.output_folder}/VCF", mode: 'copy', pattern: '{*vcf.gz}' 
 
     input:
         tuple val(file_tag), path(calls)
@@ -229,7 +231,38 @@ process fixDupcallerOutput{
         """
 }
 
+process DUPCALLER_ESTIMATE{
 
+    tag "${file_tag}"
+    label 'dupcaller'
+
+    memory params.mem+'GB'
+    cpus params.cpu
+
+    publishDir "${params.output_folder}/filtered/${file_tag}/", mode: 'copy'
+
+    input:
+        tuple val(file_tag), path(snvs), path(indels), path(trinuc)
+        path(ref)
+        path(indexes)
+
+    output:
+        path("${file_tag}*/*")
+
+    script:
+        def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
+        """
+        mkdir -p "${file_tag}"
+        mv "${calls}" "${file_tag}/."
+        DupCaller.py estimate -i ${file_tag} -f $ref ${chromosome}
+        """
+
+    stub:
+        """
+        touch "${file_tag}.txt"
+        touch "${file_tag}.png"
+        """
+}
 
 
 workflow DUPCALLER_CALL{
@@ -250,5 +283,6 @@ workflow DUPCALLER_CALL{
 
     emit:
     vcfs = fixDupcallerOutput.out.vcfs
+    trinuc = dupCallerCallAll.out.trinuc
 
 }

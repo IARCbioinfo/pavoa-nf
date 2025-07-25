@@ -63,6 +63,17 @@ Some regions in the human reference genome (e.g., GRCh38) have alternative haplo
 
 If a .alt index is provided, the pipeline automatically runs bwa-postalt.js to adjust mapping qualities and resolve ambiguities by linking ALT contigs to their primary counterparts.
 
+##### Annovar DB
+
+1- Install annovar executables (table_annovar.pl, ...). 
+Add `--annovarDBpath /path/to/annovarbin/` to your pavoa-nf command.
+
+2- Download the databases (eg. hg38db).
+Add `--annovarDBpath /path/to/hg38db` to your pavoa-nf command.
+
+3- To activate annotation step, provide a DBlist file (eg. [hg38_repeat_1.txt](assets/annovar/hg38db/hg38_repeat_1.txt) )
+Add `--annovarDBlist hg38_repeat_1.txt` to your pavoa-nf command.
+
 
 ### Optional parameters
 
@@ -116,8 +127,8 @@ If a .alt index is provided, the pipeline automatically runs bwa-postalt.js to a
 
 | Name | Description |
 |------|-------------|
-| --annovarDBlist | File with two columns : protocols and operations (see example) |
-| --annovarDBpath | Path to annovarDB |
+| --annovarDBlist | File with two columns : protocols and operations [see example](assets/annovar/hg38db/hg38_repeat_1.txt) |
+| --annovarDBpath | Path to your annovarDB |
 | --annovarBinPath | Path to table_annovar.pl |
 
 ## Usage
