@@ -216,7 +216,7 @@ The pavoa-nf pipeline performs the following major steps:
    
 2. **Alignment (A)**
    - Read alignment to reference genome (BWA-MEM2)
-   - Duplicate marking (samblaster)
+   - Duplicate marking (samblaster or MarkDuplicate)
    - Sorting and indexing (sambamba)
    - Base quality score recalibration (optional, GATK)
    - Alignment quality control (Qualimap)
