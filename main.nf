@@ -335,10 +335,9 @@ workflow {
 
     // Organise Samples for Calling
     PREPARE_CALLING_INPUT(params.input_file, alignments_merged_ch.collect())
-    PREPARE_CALLING_INPUT.out.pairs.view()
     pairs = PREPARE_CALLING_INPUT.out.pairs
 
-    // pairs.view()
+    //pairs.view()
     // Call variants using DUPCALLER
     chromosome = get_chromosomes(ref,indexes).splitText().collect{ it.trim() }
     DUPCALLER_CALL(pairs, ref, indexes, known_sites, mask)

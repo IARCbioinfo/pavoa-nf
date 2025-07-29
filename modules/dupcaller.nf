@@ -193,6 +193,7 @@ process dupCallerCallAll{
         touch ${file_tag}_indel.vcf
         touch ${file_tag}.txt
         touch ${file_tag}.png
+        touch ${file_tag}_trinuc.txt
         """
 
 }
