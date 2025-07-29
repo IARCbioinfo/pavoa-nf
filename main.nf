@@ -335,6 +335,7 @@ workflow {
 
     // Organise Samples for Calling
     PREPARE_CALLING_INPUT(params.input_file, alignments_merged_ch.collect())
+    PREPARE_CALLING_INPUT.out.pairs.view()
     pairs = PREPARE_CALLING_INPUT.out.pairs
 
     // pairs.view()

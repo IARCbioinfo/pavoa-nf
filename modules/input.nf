@@ -228,27 +228,34 @@ workflow PREPARE_CALLING_INPUT {
 
     main:
 
+    alignments_ch = alignments.flatten().collate(3).map { it -> tuple(it[0], it[1], it[2]) }
+    alignments_ch.view()
+
     // Channel of (tumor_sample, normal_sample)
     sample_pairs = Channel
         .fromPath(input_file_path)
         .splitCsv(header: true, sep: '\t', strip: true)
         .filter { row -> row.normal } // Only keep samples with matched normals
         .map { row -> tuple(row.SM, row.normal) }
+        .unique()
+    sample_pairs.view()
 
     // First join: get tumor sample alignments
     tumor_aligned = sample_pairs
-        .join(alignments, by: 0) // match on tumor sample
+        .join(alignments_ch, by: 0) // match on tumor sample
         .map { tumor_sample, normal_sample, tumor_bam, tumor_bai ->
             tuple(normal_sample, tumor_sample, tumor_bam, tumor_bai)
         }
+    tumor_aligned.view()
 
 
     // Second join: get normal sample alignments
     full_pairs = tumor_aligned
-        .join(alignments, by: 0) // match on normal sample
+        .join(alignments_ch, by: 0) // match on normal sample
         .map { normal_sample, tumor_sample, tumor_bam, tumor_bai, normal_bam, normal_bai ->
             tuple(tumor_sample, tumor_bam, tumor_bai, normal_bam, normal_bai)
         }
+    full_pairs.view()
 
     emit:
     pairs = full_pairs
