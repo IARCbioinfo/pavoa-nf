@@ -12,7 +12,7 @@ process trim_galore{
 
   cpus params.cpu
 
-  publishDir "${params.output_folder}/QC/fastq/", mode: 'copy', pattern: '*.html,*.txt,*.zip'
+  publishDir "${params.output_folder}/QC/fastq/", mode: 'copy', pattern: ~/.*\.(html|txt|zip)$/
 
   input:
   tuple val(file_tag), val(read_group), path(pair1), path(pair2)

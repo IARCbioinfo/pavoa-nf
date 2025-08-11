@@ -260,7 +260,7 @@ workflow PREPARE_CALLING_INPUT {
             tuple(tumor_sample, tumor_bam, tumor_bai, normal_bam, normal_bai)
         }
 
-    full_pairs.view()
+    //full_pairs.view()
 
     emit:
     pairs = full_pairs

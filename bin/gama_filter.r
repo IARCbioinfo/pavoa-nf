@@ -13,12 +13,14 @@ args <- commandArgs(trailingOnly = TRUE)
 sample <- if (length(args) >= 1) args[1] else "analyse"
 cov_n_thresh <- if (length(args) >= 2) as.numeric(args[2]) else 10
 cov_t_thresh <- if (length(args) >= 3) as.numeric(args[3]) else 10
-vaf_t_thresh <- if (length(args) >= 4) as.numeric(args[4]) else 0.1
-cov_alt_t_thresh <- if (length(args) >= 5) as.numeric(args[5]) else 3
+min_vaf_t_thresh <- if (length(args) >= 4) as.numeric(args[4]) else 0.1
+max_vaf_t_thresh <- if (length(args) >= 5) as.numeric(args[5]) else 1
+cov_alt_t_thresh <- if (length(args) >= 6) as.numeric(args[6]) else 3
 
 cat("Processing sample:", sample, "\n")
 cat("Thresholds - Cov_N:", cov_n_thresh, "Cov_T:", cov_t_thresh, 
-    "VAF_T:", vaf_t_thresh, "Cov_alt_T:", cov_alt_t_thresh, "\n")
+    "min VAF_T:", min_vaf_t_thresh, "max VAF_T:", max_vaf_t_thresh, 
+    "Cov_alt_T:", cov_alt_t_thresh, "\n")
 
 # Create output directory
 filtered_dir <- file.path(sample)
@@ -37,7 +39,8 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
            AMR.sites.2015_08 == ".",
            Cov_N >= cov_n_thresh,
            Cov_T >= cov_t_thresh,
-           VAF_T >= vaf_t_thresh,
+           VAF_T >= min_vaf_t_thresh,
+           VAF_T <  max_vaf_t_thresh,
            Cov_alt_T >= cov_alt_t_thresh,
            Cov_alt_N == 0,
            is_SNP == 0)
@@ -55,7 +58,7 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
   write_tsv(bed_data, bed_file, col_names = FALSE)
   
   # Step 3: Filter VCF using bedtools
-  vcf_out <- file.path(paste0(sample,"/", sample, ".vcf"))
+  vcf_out <- file.path(paste0(sample,"/", basename(vcf_file) ))
   cmd <- sprintf("bedtools intersect -a %s -b %s -header > %s", vcf_file, bed_file, vcf_out)
   system(cmd)
   
@@ -63,7 +66,7 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
 }
 
 tsv<-list.files("./", pattern = ".*_multianno.1.tsv$", full.names = TRUE)
-vcf<-list.files("./", pattern = ".*_multianno.vcf$", full.names = TRUE)
+vcf<-list.files("./", pattern = ".*.vcf$", full.names = TRUE)
 
 filter_variants(tsv[1], vcf[1], sample)
 

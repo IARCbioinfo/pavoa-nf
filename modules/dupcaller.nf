@@ -60,7 +60,7 @@ process DUPCALLER_TRIM{
 
 
 
-process dupCallerCall{
+process dupCallerCallByChromosome{
 
     tag "${file_tag}_${chromosome}"
     label 'dupcaller'
@@ -153,7 +153,7 @@ process mergeResults{
 }
 
 
-process dupCallerCallAll{
+process dupCallerCall{
 
     tag "${file_tag}"
     label 'dupcaller'
@@ -169,8 +169,12 @@ process dupCallerCallAll{
         path(indexes)
         path(known_sites)
         path(bed)
+        val(mplDir)
 
     output:
+        tuple val(file_tag), path("${file_tag}*/${file_tag}_snv.vcf"), 
+                             path("${file_tag}*/${file_tag}_indel.vcf"),
+                             path("${file_tag}*/*trinuc*"), emit: calls
         tuple val(file_tag), path("${file_tag}*/${file_tag}_snv.vcf"), emit : snvs
         tuple val(file_tag), path("${file_tag}*/${file_tag}_indel.vcf"), emit : indels
         tuple val(file_tag), path("${file_tag}*/*trinuc*"), emit: trinuc
@@ -181,6 +185,7 @@ process dupCallerCallAll{
         def noise_mask = (bed.baseName=="NO_BED") ? "" : "-m " + bed.join(" -m ")
         def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
         """
+        export MPLCONFIGDIR="$mplDir"
         DupCaller.py call -tt 30 -b $bamT -n $bamN -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask ${chromosome}
         DupCaller.py estimate -i ${file_tag} -f $ref ${chromosome}
         """
@@ -193,7 +198,7 @@ process dupCallerCallAll{
         touch ${file_tag}_indel.vcf
         touch ${file_tag}.txt
         touch ${file_tag}.png
-        touch ${file_tag}_trinuc.txt
+        touch ${file_tag}_trinuc_by_duplex_group.txt
         """
 
 }
@@ -206,8 +211,6 @@ process fixDupcallerOutput{
 
     memory params.mem+'GB'
     cpus params.cpu
-
-    //publishDir "${params.output_folder}/VCF", mode: 'copy', pattern: '{*vcf.gz}' 
 
     input:
         tuple val(file_tag), path(calls)
@@ -237,10 +240,10 @@ process DUPCALLER_ESTIMATE{
     tag "${file_tag}"
     label 'dupcaller'
 
-    memory params.mem+'GB'
-    cpus params.cpu
+    memory 1+'GB'
+    cpus 4
 
-    publishDir "${params.output_folder}/filtered/${file_tag}/", mode: 'copy'
+    publishDir "${params.output_folder}/filtered/", mode: 'copy'
 
     input:
         tuple val(file_tag), path(snvs), path(indels), path(trinuc)
@@ -248,20 +251,21 @@ process DUPCALLER_ESTIMATE{
         path(indexes)
 
     output:
-        path("${file_tag}*/*")
+        path("${file_tag}/*")
 
     script:
         def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
         """
         mkdir -p "${file_tag}"
-        mv "${calls}" "${file_tag}/."
+        mv ${file_tag}_* ${file_tag}/.
         DupCaller.py estimate -i ${file_tag} -f $ref ${chromosome}
         """
 
     stub:
         """
-        touch "${file_tag}.txt"
-        touch "${file_tag}.png"
+        mkdir -p "${file_tag}"
+        touch "${file_tag}/${file_tag}.txt"
+        touch "${file_tag}/${file_tag}.png"
         """
 }
 
@@ -276,14 +280,19 @@ workflow DUPCALLER_CALL{
     noise_mask
 
     main:
-    dupCallerCallAll(pairs, ref, indexes, known_sites, noise_mask)
-    fixDupcallerOutput(dupCallerCallAll.out.snvs.mix(dupCallerCallAll.out.indels))
-    //dupCallerCall(pairs, ref, indexes, known_sites, noise_mask, chromosome)
-    //mergeResults(dupCallerCall.out.vcfs.groupTuple(by: 0), ref, indexes)
-    //fixDupcallerOutput(mergeResults.out.vcfs)
 
+    // Create MPLCONFIGDIR for matplotlib
+    def mplDir = "${workflow.workDir}/mplconfig"
+    new File(mplDir as String).mkdirs()
+
+    dupCallerCall(pairs, ref, indexes, known_sites, noise_mask, mplDir)
+
+    DUPCALLER_ESTIMATE(dupCallerCall.out.calls,ref,indexes)
+    snvindels=dupCallerCall.out.snvs.mix(dupCallerCall.out.indels)
+    fixDupcallerOutput(snvindels)
+    
     emit:
     vcfs = fixDupcallerOutput.out.vcfs
-    trinuc = dupCallerCallAll.out.trinuc
+    trinuc = dupCallerCall.out.trinuc
 
 }

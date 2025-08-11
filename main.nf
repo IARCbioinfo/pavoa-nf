@@ -76,6 +76,13 @@ params.pass = "'PASS'"
 // Caller
 params.chromosome = null // Chromosome to process, if not set all chromosomes will be processed
 
+// GAMA filter parameters
+params.cov_n_thresh        = 10      // Normal coverage threshold
+params.cov_t_thresh        = 10      // Tumor coverage threshold  
+params.min_vaf_t_thresh    = 0.1     // Min Tumor VAF threshold
+params.max_vaf_t_thresh    = 1       // Max Tumor VAF threshold
+params.cov_alt_t_thresh    = 3       // Tumor alternative allele coverage threshold
+
 // Help message
 params.help                = false
 
@@ -115,7 +122,9 @@ def helpMessage() {
     --mem             INT     Memory for alignment in GB (default: 32)
     --cpu_bqsr        INT     CPUs for BQSR (default: 2)
     --mem_bqsr        INT     Memory for BQSR in GB (default: 10)
-    
+    --cpu_dupcaller   INT     CPUs for DupCaller (default: 64)
+    --mem_dupcaller   INT     Memory for DupCaller in GB (default: 32)
+
     Triming options:
     --trim                    Enable adapter trimming with trim_galore
     --adapter         STRING  adapter type (illumina, nextera, etc.) default(illumina)
@@ -148,6 +157,13 @@ def helpMessage() {
     --annovarDBpath    PATH       Path to annovarDB.'
     --annovarBinPath   PATH       Path to table_annovar.pl.'
     --pass             STRING     filter flags, comma separated list'
+
+    Filtering :
+    --cov_n_thresh     INT    Coverage threshold in Normal sample (default: 10)
+    --cov_t_thresh     INT    Coverage threshold in Tumor sample(default: 10)
+    --min_vaf_t_thresh FLOAT  Min VAF threshold in Tumor sample (default: 0.1)
+    --max_vaf_t_thresh FLOAT  Max VAF threshold in Tumor sample (default: 1)
+    --cov_alt_t_thresh INT    Alternative allele coverage threshold in sample (default: 3)
 
     """.stripIndent()
 }
@@ -185,32 +201,39 @@ log.info """
 ========================================================================
  Alignment Pipeline v2.0
 ========================================================================
-Input folder       : ${params.input_folder}
-Input file         : ${params.input_file}
-Reference file     : ${params.ref}
-bwa_index_dir      : ${params.bwa_index_dir ?: 'Same as reference'}
-Output folder      : ${params.output_folder}
-CPUs               : ${params.cpu}
-CPUs for BQSR      : ${params.cpu_bqsr}
-Memory             : ${params.mem} GB
-Memory for BQSR    : ${params.mem_bqsr} GB
-Recalibration      : ${params.bqsr}
-Trimming           : ${params.trim}
-Adapter            : ${params.adapter}
-Length             : ${params.length}
-Quality            : ${params.quality}
-UMI                : ${params.umi}
-Known sites        : ${params.known_sites}
-Feature file       : ${params.feature_file}
-MultiQC config     : ${params.multiqc_config}
-Plateform          : ${params.pl}
-fastq_ext          : ${params.fastq_ext}
-suffix1            : ${params.suffix1}
-suffix2            : ${params.suffix2}
-annovarDBlist      : ${params.annovarDBlist}
-annovarDBpath      : ${params.annovarDBpath}
-annovarBinPath     : ${params.annovarBinPath}
-pass               : ${params.pass}
+Input folder         : ${params.input_folder}
+Input file           : ${params.input_file}
+Reference file       : ${params.ref}
+bwa_index_dir        : ${params.bwa_index_dir ?: 'Same as reference'}
+Output folder        : ${params.output_folder}
+CPUs                 : ${params.cpu}
+CPUs for BQSR        : ${params.cpu_bqsr}
+CPUs for DupCaller   : ${params.cpu_dupcaller}
+Memory               : ${params.mem} GB
+Memory for BQSR      : ${params.mem_bqsr} GB
+Memory for DupCaller : ${params.mem_dupcaller} GB
+Recalibration        : ${params.bqsr}
+Trimming             : ${params.trim}
+Adapter              : ${params.adapter}
+Length               : ${params.length}
+Quality              : ${params.quality}
+UMI                  : ${params.umi}
+Known sites          : ${params.known_sites}
+Feature file         : ${params.feature_file}
+MultiQC config       : ${params.multiqc_config}
+Plateform            : ${params.pl}
+fastq_ext            : ${params.fastq_ext}
+suffix1              : ${params.suffix1}
+suffix2              : ${params.suffix2}
+annovarDBlist        : ${params.annovarDBlist}
+annovarDBpath        : ${params.annovarDBpath}
+annovarBinPath       : ${params.annovarBinPath}
+pass                 : ${params.pass}
+Normal cov thresh    : ${params.cov_n_thresh}
+Tumor cov thresh     : ${params.cov_t_thresh}
+Min VAF thresh       : ${params.min_vaf_t_thresh}
+Max VAF thresh       : ${params.max_vaf_t_thresh}
+alt cov thresh       : ${params.cov_alt_t_thresh}
 
 ========================================================================
     Workflow started at: ${new Date().format('yyyy-MM-dd HH:mm:ss')}
@@ -233,6 +256,7 @@ include { PREPARE_INPUT_FROM_FOLDER    } from './modules/input'
 include { PREPARE_CALLING_INPUT        } from './modules/input'
 include { DUPCALLER_TRIM               } from './modules/dupcaller'
 include { DUPCALLER_CALL               } from './modules/dupcaller'
+include { DUPCALLER_ESTIMATE           } from './modules/dupcaller'
 include { TRIM_GALORE                  } from './modules/trimming'
 include { FASTQ_ALIGNMENT              } from './modules/alignment'
 include { MARK_DUPLICATES              } from './modules/gatk'
@@ -242,6 +266,9 @@ include { QUALIMAP                     } from './modules/qc'
 include { FLAGSTAT                     } from './modules/qc'
 include { MULTIQC                      } from './modules/qc'
 include { ANNOTATION                   } from './modules/annovar'
+include { GAMA_FILTER                  } from './modules/annovar'
+
+
 
 /*
 ========================================================================================
@@ -318,7 +345,7 @@ workflow {
         alignments_merged_ch = BQSR.out.bamfiles
         reports = reports.concat(BQSR.out.recal_table_files)
     }
-    
+
     // Qualimap for BAM files
     QUALIMAP(alignments_merged_ch, feature_file)
     reports = reports.concat(QUALIMAP.out.report)
@@ -326,12 +353,11 @@ workflow {
     // Flagstat for BAM files
     FLAGSTAT(alignments_merged_ch)
     reports = reports.concat(FLAGSTAT.out.report)
-
+        
     // MultiQC reports
-    MULTIQC(reports.collect(), file(params.multiqc_config))
-
-    // Stop here if input_file_path is null
-    //if (!params.input_file) { exit() }
+    reports = reports.collect()
+        .map { files -> files.reverse().unique { it.getName() } } // to keep the last version of each file
+    MULTIQC(reports, file(params.multiqc_config))
 
     // Organise Samples for Calling
     PREPARE_CALLING_INPUT(params.input_file, alignments_merged_ch.collect())
@@ -345,11 +371,21 @@ workflow {
 
     // Annotate VCF files
     if(params.annovarDBlist){
-        ANNOTATION(vcfs)
+        filtered_vcf = ANNOTATION(vcfs)
+        filtered_vcf.view()
+        // Prepare input for DUPCALLER_ESTIMATE
+        sit = filtered_vcf.concat(DUPCALLER_CALL.out.trinuc).groupTuple(by: 0).map { sample_id, files ->
+            def snv_vcf = files.find { it.name.contains('_snv') }
+            def indel_vcf = files.find { it.name.contains('_indel') }
+            def trinuc_file = files.find { it.name.contains('trinuc') }
+            tuple(sample_id, snv_vcf, indel_vcf, trinuc_file)
+        }
+        sit.view()
+        // Reestimate duplication rates using DUPCALLER_ESTIMATE after filtering
+        DUPCALLER_ESTIMATE(sit,ref, indexes)
     }
 
     //publish:
-    //final_alignment = alignments_merged_ch
     publish_final_alignment(alignments_merged_ch)
 
 
@@ -428,15 +464,55 @@ workflow dupcaller{
             def indel_vcf = vcf_files.find { it.name.endsWith('_indel.vcf') }
             def trinuc_file = vcf_files.find { it.name.contains('trinuc') }
             tuple(sample_id, snv_vcf, indel_vcf, trinuc_file)
-        }.view()
+        }
 
-        // Restimate duplication rates using DUPCALLER_ESTIMATE after filtering
-        DUPCALLER_ESTIMATE(sit, ref, indexes, known_sites)
+        // Reestimate duplication rates using DUPCALLER_ESTIMATE after filtering
+        DUPCALLER_ESTIMATE(sit, ref, indexes)
     }
 
 }
 
+workflow filter_vcf {
 
+    main:
+    
+    // Find matching TSV and VCF file pairs
+    file_pairs_ch = Channel.fromFilePairs("${params.input_folder}/annot*/*/*{_multianno.1.tsv,.vcf}")    
+        .map { file_tag, files -> 
+            def sample_id = file_tag.replaceAll(/_(indel|snv).*/, '')
+            def tsv = files.find { it.name.endsWith('.1.tsv') }
+            def vcf = files.find { it.name.endsWith('.vcf') }
+            tuple(sample_id, tsv, vcf)
+        }.view()
+
+    // Prepare chromosome-specific reference files
+    PREPARE_REFERENCES_DUPCALLER(params.ref, params.output_folder)
+    ref = PREPARE_REFERENCES_DUPCALLER.out.ref
+    indexes = PREPARE_REFERENCES_DUPCALLER.out.indexes
+
+    // Apply GAMA filtering
+    filtered_vcf = GAMA_FILTER(file_pairs_ch)
+
+    // Prepare input for DUPCALLER_ESTIMATE
+    sit = Channel.fromPath("${params.input_folder}/dupcaller/*/*_trinuc_by_duplex_group.txt")
+        .map { file ->
+                def sample_id = file.name.replaceAll(/_trinuc_by_duplex_group\.txt$/, '')
+                tuple(sample_id, file)
+            }
+        .concat(filtered_vcf).groupTuple(by: 0).map { sample_id, files ->
+            def snv = files.find { it.name.contains('_snv') }
+            def indel = files.find { it.name.contains('_indel') }
+            def trinuc_file = files.find { it.name.contains('trinuc') }
+            tuple(sample_id, snv, indel, trinuc_file)
+        }   
+        .view()    
+    
+    // Reestimate duplication rates using DUPCALLER_ESTIMATE after filtering
+    DUPCALLER_ESTIMATE(sit, ref, indexes)
+    
+    
+
+}
 
 
 /*

@@ -56,7 +56,7 @@ get_caller_name <- function(headers) {
 set_caller_name<-function(tab,dir="./"){
 
   print("set_caller_name")
-  vcffile<-list.files(path = dir, pattern="multianno.vcf")
+  vcffile<-list.files(path = dir, pattern=".vcf")
   vcffile <- readLines(vcffile)
   header_lines <- vcffile[startsWith(vcffile, "##")]
   tab %>% mutate(caller= get_caller_name(header_lines) )

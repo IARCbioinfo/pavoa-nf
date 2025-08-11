@@ -127,9 +127,21 @@ Add `--annovarDBlist hg38_repeat_1.txt` to your pavoa-nf command.
 
 | Name | Description |
 |------|-------------|
-| --annovarDBlist | File with two columns : protocols and operations [see example](assets/annovar/hg38db/hg38_repeat_1.txt) |
-| --annovarDBpath | Path to your annovarDB |
+| --annovarDBlist  | File with two columns : protocols and operations [see example](assets/annovar/hg38db/hg38_repeat_1.txt) |
+| --annovarDBpath  | Path to your annovarDB |
 | --annovarBinPath | Path to table_annovar.pl |
+
+### Filtering
+
+| Name | Default value | Description |
+|------|---------------|-------------|
+| --cov_n_thresh     | 10  | Minimum coverage in the normal sample for at given position |
+| --cov_t_thresh     | 10  | Minimum coverage in the tumor sample for at givien position |
+| --min_vaf_t_thresh | 0.1 | Minimum Variant Allele Frequency in tumor sample |
+| --max_vaf_t_thresh | 1   | Maximum Variant Allele Frequency in tumor sample |
+| --cov_alt_t_thresh | 3   | Minimum number of read that support the alternative allele in tumor |
+
+
 
 ## Usage
 
@@ -180,24 +192,49 @@ nextflow run IARCbioinfo/pavoa-nf -entry dupcaller -profile apptainer \
   --annovarDBlist hg38_listAVDB.txt
 ```
 
+### Run only filtering
+
+You can rerun filtering step only by providing a pavoa output directory.
+
+```bash
+nextflow run IARCbioinfo/pavoa-nf -entry filter_vcf -profile apptainer \
+  --input_folder pavoa_output \
+  --ref hg38.fasta \
+  --cov_n_thresh 10 \
+  --cov_t_thresh 10 \
+  --min_vaf_t_thresh 0.1 \
+  --max_vaf_t_thresh 1 \
+  --cov_alt_t_thresh 3
+```
+
+
 ## Output
 
 | Type | Description |
 |------|-------------|
 | /    | Annotated variants in vcf and tabular format |
 | BAM/ | folder with BAM and BAI files of alignments |
-| VCF/ | folder with VCF files containing raw called variants |
+| dupcaller/ | folder with VCF files containing raw called variants |
+| annotation/ | Annotated variants, VCF and TSV files |
+| filtered/ | filtered variants |
+| QC/fastq/ | read quality reports after trimming |
 | QC/BAM/ | alignment quality control reports |
 | QC/duplicates/ | variant calling quality control reports |
 | QC/multiqc_report.html | comprehensive MultiQC report |
+| index | index files if they have been generated during process |
 | nf-pipeline_info/ | log files from all pipeline steps |
+
+> 💡 Tip: Save the index files in the same directory as the reference FASTA to avoid regenerating them in future runs.
 
 
 ```
 output/
 ├── BAM/
-├── VCF/
+├── dupcaller/
+├── annotation/
+├── filtered/
 ├── QC/
+│   ├── fastq
 │   ├── BAM/
 │   ├── duplicates/
 │   ├── multiqc_report.html
