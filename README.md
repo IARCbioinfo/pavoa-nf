@@ -71,8 +71,8 @@ Add `--annovarDBpath /path/to/annovarbin/` to your pavoa-nf command.
 2- Download the databases (eg. hg38db).
 Add `--annovarDBpath /path/to/hg38db` to your pavoa-nf command.
 
-3- To activate annotation step, provide a DBlist file (eg. [hg38_repeat_1.txt](assets/annovar/hg38db/hg38_repeat_1.txt) )
-Add `--annovarDBlist hg38_repeat_1.txt` to your pavoa-nf command.
+3- To activate annotation step, provide a DBlist file (eg. [hg38_listAVDB.txt](assets/demo/hg38_listAVDB.txt) )
+Add `--annovarDBlist hg38_listAVDB.txt` to your pavoa-nf command.
 
 
 ### Optional parameters
