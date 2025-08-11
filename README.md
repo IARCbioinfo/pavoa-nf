@@ -127,7 +127,7 @@ Add `--annovarDBlist hg38_repeat_1.txt` to your pavoa-nf command.
 
 | Name | Description |
 |------|-------------|
-| --annovarDBlist  | File with two columns : protocols and operations [see example](assets/annovar/hg38db/hg38_repeat_1.txt) |
+| --annovarDBlist  | File with two columns : protocols and operations [see example](assets/demo/hg38_listAVDB.txt) |
 | --annovarDBpath  | Path to your annovarDB |
 | --annovarBinPath | Path to table_annovar.pl |
 
