@@ -9,7 +9,7 @@ process MULTIQC {
     tag "multiqc"
     label 'multiqc'
 
-    cpus 2
+    cpus params.cpu
     memory "4.GB"
     
     publishDir "${params.output_folder}/QC/", 

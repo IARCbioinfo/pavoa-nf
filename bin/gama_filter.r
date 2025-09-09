@@ -32,6 +32,8 @@ if (!dir.exists(filtered_dir)) {
 filter_variants <- function(tsv_file, vcf_file, sample) {
   cat("\nProcessing:", basename(tsv_file), "\n")
   
+  vcf_out <- file.path(paste0(sample,"/", basename(vcf_file) ))
+
   # Step 1: Filter TSV
   filtered <- read_tsv(tsv_file, show_col_types = FALSE) %>%
     filter(avsnp150 == ".",
@@ -41,7 +43,7 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
            Cov_T >= cov_t_thresh,
            VAF_T >= min_vaf_t_thresh,
            VAF_T <  max_vaf_t_thresh,
-           Cov_alt_T >= cov_alt_t_thresh,
+           Cov_alt_T == cov_alt_t_thresh,
            Cov_alt_N == 0,
            is_SNP == 0)
   
@@ -49,6 +51,7 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
   
   if (nrow(filtered) == 0) {
     cat("No variants passed filters\n")
+    file.create(vcf_out)  # Create empty VCF file
     return()
   }
   
@@ -58,14 +61,13 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
   write_tsv(bed_data, bed_file, col_names = FALSE)
   
   # Step 3: Filter VCF using bedtools
-  vcf_out <- file.path(paste0(sample,"/", basename(vcf_file) ))
   cmd <- sprintf("bedtools intersect -a %s -b %s -header > %s", vcf_file, bed_file, vcf_out)
   system(cmd)
   
   cat("Created:", basename(vcf_out), "\n")
 }
 
-tsv<-list.files("./", pattern = ".*_multianno.1.tsv$", full.names = TRUE)
+tsv<-list.files("./", pattern = ".*.1.tsv$", full.names = TRUE)
 vcf<-list.files("./", pattern = ".*.vcf$", full.names = TRUE)
 
 filter_variants(tsv[1], vcf[1], sample)

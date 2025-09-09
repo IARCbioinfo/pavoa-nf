@@ -9,7 +9,7 @@ process annovar_annot {
     tag "${file_tag}"
     label 'annotation'
 
-    memory = params.mem+'.GB'
+    memory params.mem+'.GB'
     cpus params.cpu
 
     publishDir "${params.output_folder}/annotated/${file_tag}/", mode: 'copy'
@@ -28,11 +28,8 @@ process annovar_annot {
         """
         annovar_annot.r -i ${vcf} -t ${params.cpu} -p "${params.pass}" \\
                 -l ${annovarDBlist} -a ${annovarDB} -b ${annovar}
-        #for file in *multianno*; do
-        #    mv \$file \${file/.vcf.gz/}
-        #done
+
         mv ${file_tag}*vcf ${file_tag}${type}.vcf
-        mv ${file_tag}*1.txt ${file_tag}${type}.1.txt
         mv ${file_tag}*avinput ${file_tag}${type}_avinput
         mv ${file_tag}*multianno*txt ${file_tag}${type}_multianno.txt
         """
@@ -53,7 +50,7 @@ process gama_annot {
     
     publishDir "${params.output_folder}/annotated/${file_tag}/", mode: 'copy'
 
-    memory = 1+'GB'
+    memory 1+'GB'
     cpus 1
 
     input:

@@ -18,27 +18,31 @@ process trim_galore{
   tuple val(file_tag), val(read_group), path(pair1), path(pair2)
 
   output:
-  tuple val(file_tag), val(read_group), path("${file_tag}_trimmed_R1.fastq.gz"), path("${file_tag}_trimmed_R2.fastq.gz"), emit: trimmed_fastq
+  tuple val(file_tag), val(read_group), path("*_trimmed_1.fq.gz"), path("*_trimmed_2.fq.gz"), emit: trimmed_fastq
   path("*.{zip,txt}"), emit: reports
   path("*.html")
 
   script:
+  def basename1 = pair1.baseName.replaceAll(/\.(fastq|fq)(\.gz)?$/, '')
+  def basename2 = pair2.baseName.replaceAll(/\.(fastq|fq)(\.gz)?$/, '')
   """
   trim_galore --cores ${task.cpus} --${params.adapter} --quality ${params.quality} --length ${params.length} --fastqc --paired "$pair1" "$pair2" -o .
-  mv ${file_tag}_1_val_1.fq.gz ${file_tag}_trimmed_R1.fastq.gz
-  mv ${file_tag}_2_val_2.fq.gz ${file_tag}_trimmed_R2.fastq.gz
-  mv ${file_tag}_1_val_1_fastqc.zip ${file_tag}_R1_fastqc.zip
-  mv ${file_tag}_2_val_2_fastqc.zip ${file_tag}_R2_fastqc.zip
-  mv ${file_tag}_1_val_1_fastqc.html ${file_tag}_R1_fastqc.html
-  mv ${file_tag}_2_val_2_fastqc.html ${file_tag}_R2_fastqc.html
+  mv "${basename1}_val_1.fq.gz" "${file_tag}_${read_group}_trimmed_1.fq.gz"
+  mv "${basename2}_val_2.fq.gz" "${file_tag}_${read_group}_trimmed_2.fq.gz"
+  mv "${basename1}_trimming_report.txt" "${file_tag}_${read_group}_trimming_report.txt"
+  mv "${basename2}_trimming_report.txt" "${file_tag}_${read_group}_trimming_report.txt"
+  mv "${basename1}_val_1_fastqc.zip" "${file_tag}_${read_group}_1_fastqc.zip"
+  mv "${basename2}_val_2_fastqc.zip" "${file_tag}_${read_group}_2_fastqc.zip"
+  mv "${basename1}_val_1_fastqc.html" "${file_tag}_${read_group}_1_fastqc.html"
+  mv "${basename2}_val_2_fastqc.html" "${file_tag}_${read_group}_2_fastqc.html"
   """
 
   stub:
   """
-  touch "${file_tag}_trimmed_R1.fastq.gz" "${file_tag}_trimmed_R2.fastq.gz"
-  touch "${file_tag}_R1_fastqc.zip" "${file_tag}_R2_fastqc.zip"
-  touch "${file_tag}_R1_fastqc.html" "${file_tag}_R2_fastqc.html"
-  touch "${file_tag}_1_val_1.fastq.gz_trimming_report.txt" "${file_tag}_2_val_2.fastq.gz_trimming_report.txt"
+  touch "${file_tag}_${read_group}_trimmed_1.fq.gz" "${file_tag}_${read_group}_trimmed_2.fq.gz"
+  touch "${file_tag}_${read_group}_1_fastqc.zip" "${file_tag}_${read_group}_2_fastqc.zip"
+  touch "${file_tag}_${read_group}_1_fastqc.html" "${file_tag}_${read_group}_2_fastqc.html"
+  touch "${file_tag}_${read_group}_trimming_report.txt" "${file_tag}_${read_group}_trimming_report.txt"
   """
 }
 
