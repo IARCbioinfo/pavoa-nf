@@ -7,12 +7,12 @@
 
 process make_bed {
 
+    label 'mutect2'
+
     input:
     path bed
     path indexes
     val nsplit
-
-    label 'mutect2'
 
     output:
     path '*_regions.bed'
@@ -178,7 +178,7 @@ process ContaminationEstimation {
     
     stub:
         """
-        touch ${pileupT.baseName}_contamination.table
+        touch ${bamN.baseName}_contamination.table
         """
 }
 
@@ -250,7 +250,7 @@ workflow MUTECT2_CALL{
     main:
 
     // Panel Of Normal
-    PON = params.PON ? (tuple file(params.PON), file(params.PON +'.tbi')) : (tuple file("NO_FILE"), file("NO_FILE_TBI"))
+    PON = params.PON ? (tuple (file(params.PON), file(params.PON +'.tbi'))) : (tuple (file("NO_FILE"), file("NO_FILE_TBI")))
 
     //mutect2
     regions = make_bed(bed,indexes,params.nsplit) | flatten

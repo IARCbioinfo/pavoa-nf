@@ -549,7 +549,7 @@ workflow filter_vcf {
     main:
     
     // Find matching TSV and VCF file pairs
-    file_pairs_ch = Channel.fromFilePairs("${params.input_folder}/annot*/*/*{.1.tsv,.vcf}")   
+    file_pairs_ch = Channel.fromFilePairs("${params.input_folder}/annot*/*/*{_multianno.1.tsv,.vcf}")   
         .map { file_tag, files -> 
             def sample_id = file_tag.replaceAll(/_(indel|snv).*/, '')
             def tag = file_tag =~ /_(indel|snv)/
@@ -579,7 +579,7 @@ workflow filter_vcf {
             def trinuc_file = files.find { it.name.contains('trinuc') }
             tuple(sample_id, snv, indel, trinuc_file)
         }   
-        .view()    
+        //.view()
     
     // Reestimate duplication rates using DUPCALLER_ESTIMATE after filtering
     DUPCALLER_ESTIMATE(sit, ref, indexes)

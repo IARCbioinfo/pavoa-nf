@@ -39,7 +39,7 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
     filter(avsnp150 == ".",
            ALL.sites.2015_08 == ".",
            AMR.sites.2015_08 == ".",
-           avsnp150 == "."
+           avsnp150 == ".",
            Cov_N >= cov_n_thresh,
            Cov_T >= cov_t_thresh,
            VAF_T >= min_vaf_t_thresh,
