@@ -21,7 +21,7 @@ nextflow.enable.dsl = 2
 // Input/Output
 params.input_folder        = null
 params.input_file          = null
-params.output_folder       = "pavoa_" + new Date().format('yyyyMMdd')
+params.output_folder       = "pavoa_output"
 
 // Reference genome
 params.ref                 = null
@@ -46,7 +46,8 @@ params.suffix2             = "_2"
 // Known sites
 params.known_sites         = []
 params.mask                = null
-    
+params.snp_contam          = null
+
 // Tool options
 params.bwa_option_m        = false
 params.adapterremoval_opt  = ""
@@ -59,9 +60,8 @@ params.length              = 30
 params.quality             = 30
 
 // Features
-params.bqsr                  = false
 params.umi                   = false
-params.alt                   = false
+params.bqsr                  = params.umi ? false : true
 
 // QC
 params.feature_file        = 'NO_FILE'
@@ -73,15 +73,26 @@ params.annovarDBpath  = "/data/databases/annovar/hg38db/"
 params.annovarBinPath = "~/bin/annovar/"
 params.pass = "'PASS'"
 
-// Caller
+// Dupcaller
 params.chromosome = null // Chromosome to process, if not set all chromosomes will be processed
 
+// strelka2
+params.strelka2 = true
+params.strelka_bin = "/opt/conda/envs/strelka2-nf/share/strelka-2.9.10-0/bin/"
+params.strelka_config = null
+params.exome = false
+
+// mutect2
+params.mutect2 = true
+params.mutect_args = ""
+params.nsplit = 1000
+
 // GAMA filter parameters
-params.cov_n_thresh        = 10      // Normal coverage threshold
-params.cov_t_thresh        = 10      // Tumor coverage threshold  
-params.min_vaf_t_thresh    = 0.1     // Min Tumor VAF threshold
-params.max_vaf_t_thresh    = 1       // Max Tumor VAF threshold
-params.cov_alt_t_thresh    = 3       // Tumor alternative allele coverage threshold
+params.cov_n_thresh        = params.umi ? 1 : 10      // Normal coverage threshold
+params.cov_t_thresh        = params.umi ? 1 : 10      // Tumor coverage threshold  
+params.min_vaf_t_thresh    = params.umi ? 0 : 0.1     // Min Tumor VAF threshold
+params.max_vaf_t_thresh    = 1                        // Max Tumor VAF threshold
+params.cov_alt_t_thresh    = params.umi ? 1 : 3       // Tumor alternative allele coverage threshold
 
 // Help message
 params.help                = false
@@ -265,6 +276,8 @@ include { MERGE_BAM                    } from './modules/merging'
 include { QUALIMAP                     } from './modules/qc'
 include { FLAGSTAT                     } from './modules/qc'
 include { MULTIQC                      } from './modules/qc'
+include { STRELKA2_CALL                } from './modules/strelka'
+include { MUTECT2_CALL                 } from './modules/mutect2'
 include { ANNOTATION                   } from './modules/annovar'
 include { GAMA_FILTER                  } from './modules/annovar'
 
@@ -334,10 +347,10 @@ workflow {
     alignments_merged_ch = MERGE_BAM.out.merged_bam
 
     // Mark duplicates per chromosome (if UMI enabled)
-    if (params.umi) {
+    //if (params.umi) {
         MARK_DUPLICATES(alignments_merged_ch)
         alignments_merged_ch = MARK_DUPLICATES.out.bam_files
-    }
+    //}
     
     // Base quality score recalibration per chromosome
     if (params.bqsr) {
@@ -451,7 +464,7 @@ workflow dupcaller{
 
     // pairs.view()
     // Call variants using DUPCALLER
-    DUPCALLER_CALL(pairs, ref, indexes)
+    DUPCALLER_CALL(pairs, ref, indexes, known_sites, mask)
     vcfs = DUPCALLER_CALL.out.vcfs
 
     // Annotate VCF files
@@ -472,16 +485,77 @@ workflow dupcaller{
 
 }
 
+
+/*
+========================================================================================
+    RUN only mutect and strelka
+========================================================================================
+*/
+
+workflow call{
+
+    main:
+
+    // Define input channels
+    pairs = Channel
+        .fromPath(params.input_file)
+        .splitCsv(header: true, sep: '\t', strip: true)
+        .filter { row -> row.normal } // Only keep samples with matched normals
+        .map { row -> tuple(row.SM, file(row.tumor), file(row.tumor + ".bai"), file(row.normal), file(row.normal + ".bai")) }
+
+    // Prepare chromosome-specific reference files
+    PREPARE_REFERENCES(params.ref, params.bwa_index_dir, params.output_folder)
+    ref = PREPARE_REFERENCES.out.ref
+    indexes = PREPARE_REFERENCES.out.indexes
+
+    // Prepare vcf files for known sites (dbsnp, dbindel, etc.)
+    known_sites = params.known_sites ? Channel
+        .fromList(params.known_sites)
+        .map { vcf -> [file(vcf), file("${vcf}.tbi")] }
+        .collect()
+    : Channel.empty()
+
+    // Prepare feature file
+    bed = params.feature_file ? file(params.feature_file) : file("NO_BED")
+
+    // Prepare contamination SNP file
+    snp_contam = params.snp_contam ? file(params.snp_contam) : null
+
+    // Initialize empty channel for VCFs
+    vcfs = Channel.empty() 
+
+    if(params.strelka2){
+        // Call variants using STRELKA2
+        STRELKA2_CALL(pairs, ref, indexes, bed)
+        vcfs = vcfs.concat(STRELKA2_CALL.out.vcfs)
+    }
+
+    if(params.mutect2){
+        // Call variants using MUTECT2
+        MUTECT2_CALL(pairs, ref, indexes, bed, known_sites, snp_contam)
+        vcfs = vcfs.concat(MUTECT2_CALL.out.vcfs)
+    }
+
+    // Annotate VCF files
+    if(params.annovarDBlist){
+        filtered_vcf = ANNOTATION(vcfs)
+    }
+
+}
+
+
 workflow filter_vcf {
 
     main:
     
     // Find matching TSV and VCF file pairs
-    file_pairs_ch = Channel.fromFilePairs("${params.input_folder}/annot*/*/*{_multianno.1.tsv,.vcf}")    
+    file_pairs_ch = Channel.fromFilePairs("${params.input_folder}/annot*/*/*{.1.tsv,.vcf}")   
         .map { file_tag, files -> 
             def sample_id = file_tag.replaceAll(/_(indel|snv).*/, '')
-            def tsv = files.find { it.name.endsWith('.1.tsv') }
-            def vcf = files.find { it.name.endsWith('.vcf') }
+            def tag = file_tag =~ /_(indel|snv)/
+            def tag_value = tag ? "_${tag[0][1]}" : ""
+            def tsv = files.find { it.name.endsWith('.1.tsv') }.copyTo("${sample_id}${tag_value}.1.tsv")
+            def vcf = files.find { it.name.endsWith('.vcf') }.copyTo("${sample_id}${tag_value}.vcf")
             tuple(sample_id, tsv, vcf)
         }.view()
 

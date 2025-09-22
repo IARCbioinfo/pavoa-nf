@@ -42,7 +42,7 @@ process MARK_DUPLICATES_UMI {
     samtools view -H ${file_tag}_dedup.tmp.bam > header.sam
     sed -i 's/SO:unknown/SO:coordinate/' header.sam
     samtools reheader header.sam ${file_tag}_dedup.tmp.bam > ${file_tag}_dedup.bam
-    samtools index ${file_tag}_dedup.bam -o ${file_tag}_dedup.bam.bai
+    samtools index ${file_tag}_dedup.bam ${file_tag}_dedup.bam.bai
 
     # Cleanup
     rm -f ${file_tag}_dedup.tmp.bam ${file_tag}_dedup.tmp.bai header.sam

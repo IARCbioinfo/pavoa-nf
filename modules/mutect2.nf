@@ -8,25 +8,27 @@
 process make_bed {
 
     input:
-        path indexes
-        val nsplit
+    path bed
+    path indexes
+    val nsplit
+
+    label 'mutect2'
 
     output:
-        path '*_regions.bed'
+    path '*_regions.bed'
 
     shell:
+    if(params.feature_file){
+        """
+        grep -v '^track' $bed | sort -T \$PWD -k1,1 -k2,2n | bedtools merge -i stdin | awk '{print \$1" "\$2" "\$3}' | cut_into_small_beds.r $nsplit
+        """
+    } else {
         """
         cat *fai | awk '{print \$1"	"0"	"\$2 }' | grep -v -P "alt|random|Un|chrEBV|HLA" > temp.bed
         grep -v '^track' temp.bed | sort -T \$PWD -k1,1 -k2,2n | bedtools merge -i stdin | awk '{print \$1" "\$2" "\$3}' | cut_into_small_beds.r $nsplit
         """
+    }
 
-    stub:
-        """
-        touch chr1_regions.bed
-        touch chr2_regions.bed
-        touch chr3_regions.bed
-        touch chrX_regions.bed
-        """
 }
 
 
@@ -36,24 +38,27 @@ process mutect {
     memory params.mem+'GB' 
     cpus params.cpu
 
+    label 'mutect2'
+
     input:
         tuple val(file_tag), path(bamT), path(baiT), path(bamN), path(baiN), path(bed)
         path(ref)
         path(indexes)
         tuple path(PON), path(PON_tbi)
-        tuple path(known_sites), path(known_sites_tbi)
+        path(known_sites)
 
     output:
-        tuple val(file_tag), path("${printed_tag}_*.vcf"), path("${printed_tag}*stats*"), emit: calls
-        tuple val(file_tag), path("${printed_tag}_f1r2.tar.gz"), emit : f1r2
+        tuple val(file_tag), path("*_calls.vcf"), path("*_calls.vcf.stats"), emit: calls
+        tuple val(file_tag), path("*_f1r2.tar.gz"), emit : f1r2
 
     shell:
         def bed_tag = bed.baseName.replaceAll("[^a-zA-Z0-9 _-]+","")
         def printed_tag = "${file_tag}_" + bed_tag
         def input_t = "-I " + bamT.join(" -I ")
         def input_n = (bamN.baseName == 'None') ? "" : "-I ${bamN} -normal \$normal_name"
-        def KS_option = known_sites ? "--germline-resource ${known_sites.get(0)}" : ""
-        def PON_option = PON ? "--panel-of-normals ${PON.get(0)}" : ""
+        def KS_vcf = known_sites.find { !it.name.endsWith(".tbi") }
+        def KS_option = KS_vcf ? "--germline-resource ${KS_vcf}" : ""
+        def PON_option = PON ? "--panel-of-normals ${PON.getAt(0)}" : ""
         """
         normal_name=`samtools view -H $bamN | grep "^@RG" | head -1 | awk '{print \$NF}' | cut -c 4-`
         echo \$normal_name
@@ -71,6 +76,8 @@ process mutect {
 
 process mergeMuTectOutputs {
 
+    label 'mutect2'
+
     publishDir "${params.output_folder}/mutect2/", mode: 'copy', saveAs: {filename ->
         if (filename.indexOf(".stats") > 0) "stats/$filename"
         else if (filename.indexOf(".vcf") > 0) "intermediate_calls/raw_calls/$filename"
@@ -83,7 +90,6 @@ process mergeMuTectOutputs {
         tuple val(file_tag), path("${file_tag}_calls.vcf"), path("${file_tag}_calls.vcf.stats"), emit : calls
 
     shell:
-        input_stats = "-stats " + txt_files.join(" -stats ")
         """
         # MERGE VCF FILES
         sed '/^#CHROM/q' `ls -1 *.vcf | head -1` > header.txt
@@ -98,7 +104,15 @@ process mergeMuTectOutputs {
         mv header.txt ${file_tag}_calls.vcf
 
         # MERGE STAT FILES
-        gatk MergeMutectStats $input_stats -O ${file_tag}_calls.vcf.stats
+        
+        # Build stats argument dynamically in bash
+        input_stats=""
+            for f in *stats; do
+        input_stats="\$input_stats -stats \$f"
+        done
+
+        # Concatenate STAT files
+        gatk MergeMutectStats \$input_stats -O ${file_tag}_calls.vcf.stats
         """
 
     stub:
@@ -108,6 +122,8 @@ process mergeMuTectOutputs {
 }
 
 process ReadOrientationLearn {
+
+    label 'mutect2'
             
     publishDir "${params.output_folder}/mutect2/stats/", mode: 'copy'
 
@@ -118,9 +134,13 @@ process ReadOrientationLearn {
         tuple val(file_tag), path("*model.tar.gz"), emit : ROmodel
 
     shell:
-        input_f1r2 = "-I " + f1r2_files.join(" -I ")
         """
-        gatk LearnReadOrientationModel ${input_f1r2} -O ${file_tag}_read-orientation-model.tar.gz
+        # Build input_f1r2 argument dynamically in bash
+        input_f1r2=""
+        for f in *_f1r2.tar.gz; do
+            input_f1r2="\$input_f1r2 -I \$f"
+        done
+        gatk LearnReadOrientationModel \${input_f1r2} -O ${file_tag}_read-orientation-model.tar.gz
         """
     
     stub:
@@ -134,6 +154,8 @@ process ContaminationEstimation {
    	
 	cpus '16'
     memory '164 GB'
+
+    label 'mutect2'
 	    
     publishDir "${params.output_folder}/mutect/contamination/", mode: 'copy'
 
@@ -144,7 +166,7 @@ process ContaminationEstimation {
         tuple path(snp_contam), path(snp_contam_tbi)
 
 	output:
-	    tuple val(file_tag), path("*contamination.table")
+	    tuple val(file_tag), path("*contamination.table"), emit: contam_tables
 	
     shell:
 	    """
@@ -163,20 +185,23 @@ process ContaminationEstimation {
 
 process FilterMuTectOutputs {
 
+    label 'mutect2'
+
     publishDir "${params.output_folder}/mutect2/intermediate_calls/filtered", mode: 'copy'
 
     input:
         tuple val(tumor_normal_tag), path(vcf), path(stats), path(ROmodel), path(contam_tables)
-        tuple path(fasta_ref), path(fasta_ref_fai), path(fasta_ref_gzi), path(fasta_ref_dict)
+        path(ref)
+        path(indexes)
 
     output:
-        tuple val(tumor_normal_tag), path("*filtered.vcf*")
+        tuple val(tumor_normal_tag), path("*filtered.vcf{,.tbi}"), emit: calls
 
     shell:
         RO = (ROmodel.baseName=="NO_ROmodel") ? "": "--ob-priors " + ROmodel.join(" --ob-priors ")
         contam = (contam_tables.baseName == "NO_contam") ? "" : "--contamination-table " + contam_tables.join(" --contamination-table ")
         """
-        gatk FilterMutectCalls -R $fasta_ref -V $vcf $contam $RO -O ${tumor_normal_tag}_filtered.vcf
+        gatk FilterMutectCalls -R $ref -V $vcf $contam $RO -O ${tumor_normal_tag}_filtered.vcf
         """
     
     stub:
@@ -187,6 +212,8 @@ process FilterMuTectOutputs {
 
 
 process FilterMuTectOutputsOnPass {
+
+    label 'mutect2'
 
     publishDir "$params.output_folder/mutect/PASS/", mode: 'copy'
 
@@ -216,16 +243,17 @@ workflow MUTECT2_CALL{
     pairs // tuple (file_tag, bamT, baiT, bamN, baiN)
     ref
     indexes
+    bed
     known_sites
     snp_contam
 
     main:
 
     // Panel Of Normal
-    PON = params.PON ? (tuple file(params.PON), file(params.PON +'_TBI')) : (tuple file("NO_FILE"), file("NO_FILE_TBI"))
+    PON = params.PON ? (tuple file(params.PON), file(params.PON +'.tbi')) : (tuple file("NO_FILE"), file("NO_FILE_TBI"))
 
     //mutect2
-    regions = make_bed(indexes,params.nsplit) | flatten
+    regions = make_bed(bed,indexes,params.nsplit) | flatten
     mutect(pairs.combine(regions), ref, indexes, PON, known_sites)
     mutectOutput = mergeMuTectOutputs(mutect.out.calls.groupTuple(size: params.nsplit))
 
@@ -242,7 +270,7 @@ workflow MUTECT2_CALL{
     }
     
     // filter
-    FilterMuTectOutputs(mutectOutput, ref) | FilterMuTectOutputsOnPass
+    FilterMuTectOutputs(mutectOutput, ref, indexes) | FilterMuTectOutputsOnPass
 
     emit:
     vcfs = FilterMuTectOutputs.out.calls

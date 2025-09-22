@@ -8,7 +8,9 @@
 process strelka_somatic {
 
     cpus params.cpu
-    memory params.mem+'GB' 
+    memory params.mem+'GB'
+
+    label 'strelka2'
       
     publishDir "${params.output_folder}/strelka/", mode: 'copy', pattern: "*vcf*"
     publishDir "${params.output_folder}/strelka/CallableRegions/", mode: 'copy', pattern: "*bed*"
@@ -20,19 +22,22 @@ process strelka_somatic {
         path(bed)
 
      output:
-        tuple val(file_tag), path("*.somatic.snvs.vcf.gz"), path("*.somatic.indels.vcf.gz"), emit: calls
-        tuple val(file_tag), path("*.somatic.snvs.vcf.gz"), emit : snvs
-        tuple val(file_tag), path("*.somatic.indels.vcf.gz"), emit : indels
+        tuple val(file_tag), path("*.snvs.vcf.gz"), path("*.indels.vcf.gz"), emit: calls
+        tuple val(file_tag), path("*.snvs.vcf.gz"), emit : snvs
+        tuple val(file_tag), path("*.indels.vcf.gz"), emit : indels
         path("*callable.regions.bed.gz*"), emit : regionfiles
-        path("*.somatic.*")
 
     script:
-    def strelka = "configureStrelkaSomaticWorkflow.py"
+    def strelka = "${params.strelka_bin}/configureStrelkaSomaticWorkflow.py"
     def config = params.strelka_config ? params.strelka_config : strelka + ".ini"
     def exome = params.exome ? "--exome" : ""
-    def callRegions = (bed.baseName=="NO_BED") ? "" : "--callRegions " + bed
+    def bedfile = bed.getAt(0)
+    def callRegions = (bedfile.baseName=="NO_BED") ? "" : "--callRegions " + bedfile + ".gz"
 
     """
+    bgzip ${bedfile}
+    tabix ${bedfile}.gz
+
     ${strelka} --tumorBam ${bamT} --normalBam ${bamN} --referenceFasta ${ref} \\
         --config ${config} ${exome} ${callRegions} \\
         --runDir strelkaAnalysis --outputCallableRegions
@@ -40,16 +45,24 @@ process strelka_somatic {
     ./strelkaAnalysis/runWorkflow.py -m local -j ${params.cpu} -g ${params.mem}
 
     mv strelkaAnalysis/results/variants/* .
-    mv somatic.indels.vcf.gz !{file_tag}.indels.vcf.gz
-    mv somatic.snvs.vcf.gz !{file_tag}.snvs.vcf.gz
-    mv somatic.indels.vcf.gz.tbi !{file_tag}.indels.vcf.gz.tbi
-    mv somatic.snvs.vcf.gz.tbi !{file_tag}.snvs.vcf.gz.tbi
+    mv somatic.indels.vcf.gz ${file_tag}.indels.vcf.gz
+    mv somatic.snvs.vcf.gz ${file_tag}.snvs.vcf.gz
+    mv somatic.indels.vcf.gz.tbi ${file_tag}.indels.vcf.gz.tbi
+    mv somatic.snvs.vcf.gz.tbi ${file_tag}.snvs.vcf.gz.tbi
     fixStrelkaOutput.sh *.vcf.gz
 
     mv strelkaAnalysis/results/regions/* .
-    mv somatic.callable.regions.bed.gz !{file_tag}.callable.regions.bed.gz
-    mv somatic.callable.regions.bed.gz.tbi !{file_tag}.callable.regions.bed.gz.tbi
+    mv somatic.callable.regions.bed.gz ${file_tag}.callable.regions.bed.gz
+    mv somatic.callable.regions.bed.gz.tbi ${file_tag}.callable.regions.bed.gz.tbi
     """
+
+    stub:
+    """
+    touch ${file_tag}.snvs.vcf.gz ${file_tag}.snvs.vcf.gz.tbi
+    touch ${file_tag}.indels.vcf.gz ${file_tag}.indels.vcf.gz.tbi
+    touch ${file_tag}.callable.regions.bed.gz ${file_tag}.callable.regions.bed.gz.tbi
+    """
+
 }
 
 
