@@ -12,18 +12,18 @@ process annovar_annot {
     memory params.mem+'.GB'
     cpus params.cpu
 
-    publishDir "${params.output_folder}/annotated/${file_tag}/", mode: 'copy'
+    publishDir "${params.output_folder}/${caller_tag}/calls/annovar/${file_tag}/", mode: 'copy'
 
     input:
-        tuple val(file_tag), path(vcf)
+        tuple val(file_tag), path(vcf), val(caller_tag)
         path annovar
         path annovarDB
         path annovarDBlist
 
     output:
-        tuple val(file_tag), path("*_avinput"), path("*.txt"), path("*.vcf"), emit: annotated
+        tuple val(file_tag), path("*_avinput"), path("*.txt"), path("*.vcf"), val(caller_tag), emit: annotated
 
-    shell:
+    script:
         def type = vcf.baseName.contains("indel") ? "_indel" : (vcf.baseName.contains("snv") ? "_snv" : "_call")
         """
         annovar_annot.r -i ${vcf} -t ${params.cpu} -p "${params.pass}" \\
@@ -48,19 +48,19 @@ process gama_annot {
     tag "${file_tag}"
     label 'annotation'
     
-    publishDir "${params.output_folder}/annotated/${file_tag}/", mode: 'copy'
+    publishDir "${params.output_folder}/${caller_tag}/calls/annotations/${file_tag}/", mode: 'copy'
 
-    memory 1+'GB'
+    memory '1.GB'
     cpus 1
 
     input:
-        tuple val(file_tag), path(avinput), path(tab), path(vcf)
+        tuple val(file_tag), path(avinput), path(tab), path(vcf), val(caller_tag)
         path annovarDB
 
     output:
-        tuple val(file_tag), path("*1.tsv"), path(vcf), emit: annotated
+        tuple val(file_tag), path("*1.tsv"), path(vcf), val(caller_tag), emit: annotated
 
-    shell:
+    script:
         """
         gama_annot.r -a ${annovarDB}
         """
@@ -77,18 +77,18 @@ process filter_vcf {
     tag "${file_tag}"
     label 'annotation'
 
-    memory = 1+'GB'
+    memory '1.GB'
     cpus 1
 
-    publishDir "${params.output_folder}/filtered/", mode: 'copy'
+    publishDir "${params.output_folder}/${caller_tag}/calls/filtered.1/", mode: 'copy'
 
     input:
-        tuple val(file_tag), path(tsv), path(vcf)
+        tuple val(file_tag), path(tsv), path(vcf), val(caller_tag)
 
     output:
-        tuple val(file_tag), path("${file_tag}/*vcf"), emit: filtered_vcf
+        tuple val(file_tag), path("${file_tag}/*vcf"), val(caller_tag), emit: filtered_vcf
 
-    shell:
+    script:
         //def new_tag = file_tag.replaceAll(/(\.[^.]+)?_multianno/, '')
         """
         gama_filter.r $file_tag ${params.cov_n_thresh} ${params.cov_t_thresh} ${params.min_vaf_t_thresh} ${params.max_vaf_t_thresh} ${params.cov_alt_t_thresh}
@@ -116,7 +116,6 @@ workflow ANNOTATION{
     annovar_annot(vcfs,annovar,annovarDB,annovarDBlist)
     gama_annot(annovar_annot.out.annotated,annovarDB)
     filter_vcf(gama_annot.out.annotated)
-    filter_vcf.out.filtered_vcf.view()
 
     emit:
     annotated_tsv = filter_vcf.out.filtered_vcf

@@ -12,8 +12,8 @@ process strelka_somatic {
 
     label 'strelka2'
       
-    publishDir "${params.output_folder}/strelka/", mode: 'copy', pattern: "*vcf*"
-    publishDir "${params.output_folder}/strelka/CallableRegions/", mode: 'copy', pattern: "*bed*"
+    publishDir "${params.output_folder}/strelka2/calls/", mode: 'copy', pattern: "*vcf*"
+    publishDir "${params.output_folder}/strelka2/CallableRegions/", mode: 'copy', pattern: "*bed*"
 
     input:
         tuple val(file_tag), path(bamT), path(baiT), path(bamN), path(baiN)
@@ -79,6 +79,6 @@ workflow STRELKA2_CALL{
     snvindels=strelka_somatic.out.snvs.mix(strelka_somatic.out.indels)
     
     emit:
-    vcfs = snvindels
+    vcfs = snvindels.map{ file_tag, vcf -> tuple(file_tag, vcf, "strelka2") }
 
 }

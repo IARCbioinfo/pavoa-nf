@@ -244,7 +244,7 @@ workflow PREPARE_CALLING_INPUT {
     // First join: get tumor sample alignments
     tumor_aligned = sample_pairs
         .join(alignments_ch, by: 0) // match on tumor sample
-        .filter { tumor_sample, normal_sample, tumor_bam, tumor_bai -> 
+        .filter { tumor_sample, normal_sample, _tumor_bam, _tumor_bai -> 
             tumor_sample != normal_sample // for stupid users that might put the same sample as both tumor and normal !
         }
         .map { tumor_sample, normal_sample, tumor_bam, tumor_bai ->
@@ -256,7 +256,7 @@ workflow PREPARE_CALLING_INPUT {
     // Second join: get normal sample alignments
     full_pairs = tumor_aligned
         .combine(alignments_ch, by: 0) // match on normal sample
-        .map { normal_sample, tumor_sample, tumor_bam, tumor_bai, normal_bam, normal_bai ->
+        .map { _normal_sample, tumor_sample, tumor_bam, tumor_bai, normal_bam, normal_bai ->
             tuple(tumor_sample, tumor_bam, tumor_bai, normal_bam, normal_bai)
         }
 

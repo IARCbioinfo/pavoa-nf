@@ -18,7 +18,7 @@ process MULTIQC {
     
     publishDir "${params.output_folder}/QC/", 
                mode: 'copy', 
-               pattern: "multiqc_report_data/"
+               pattern: "multiqc_report_data"
     
     input:
     path(reports)
@@ -26,7 +26,7 @@ process MULTIQC {
     
     output:
     path("multiqc_report.html"), emit: report
-    path("multiqc_report_data/"), emit: data
+    path("multiqc_report_data"), emit: data
     
     script:
     config = (multiqc_config.name=="NO_FILE") ? "" : "--config ${multiqc_config}"
@@ -82,7 +82,7 @@ process QUALIMAP {
     cpus params.cpu
     memory params.mem + 'G'
 
-    publishDir "${params.output_folder}/QC/BAM/qualimap/", mode: 'copy', pattern: "$file_tag/*"
+    publishDir "${params.output_folder}/QC/BAM/qualimap/", mode: 'copy'
     
     input:
     tuple val(file_tag), path(bam), path(bai)

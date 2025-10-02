@@ -17,7 +17,7 @@ process make_bed {
     output:
     path '*_regions.bed'
 
-    shell:
+    script:
     if(params.feature_file){
         """
         grep -v '^track' $bed | sort -T \$PWD -k1,1 -k2,2n | bedtools merge -i stdin | awk '{print \$1" "\$2" "\$3}' | cut_into_small_beds.r $nsplit
@@ -51,14 +51,14 @@ process mutect {
         tuple val(file_tag), path("*_calls.vcf"), path("*_calls.vcf.stats"), emit: calls
         tuple val(file_tag), path("*_f1r2.tar.gz"), emit : f1r2
 
-    shell:
+    script:
         def bed_tag = bed.baseName.replaceAll("[^a-zA-Z0-9 _-]+","")
         def printed_tag = "${file_tag}_" + bed_tag
         def input_t = "-I " + bamT.join(" -I ")
         def input_n = (bamN.baseName == 'None') ? "" : "-I ${bamN} -normal \$normal_name"
         def KS_vcf = known_sites.find { !it.name.endsWith(".tbi") }
         def KS_option = KS_vcf ? "--germline-resource ${KS_vcf}" : ""
-        def PON_option = PON ? "--panel-of-normals ${PON.getAt(0)}" : ""
+        def PON_option = (PON.baseName == 'NO_FILE') ? "" : "--panel-of-normals ${PON.getAt(0)}"
         """
         normal_name=`samtools view -H $bamN | grep "^@RG" | head -1 | awk '{print \$NF}' | cut -c 4-`
         echo \$normal_name
@@ -80,7 +80,7 @@ process mergeMuTectOutputs {
 
     publishDir "${params.output_folder}/mutect2/", mode: 'copy', saveAs: {filename ->
         if (filename.indexOf(".stats") > 0) "stats/$filename"
-        else if (filename.indexOf(".vcf") > 0) "intermediate_calls/raw_calls/$filename"
+        else if (filename.indexOf(".vcf") > 0) "raw_calls/$filename"
     }
     
     input:
@@ -89,7 +89,7 @@ process mergeMuTectOutputs {
     output:
         tuple val(file_tag), path("${file_tag}_calls.vcf"), path("${file_tag}_calls.vcf.stats"), emit : calls
 
-    shell:
+    script:
         """
         # MERGE VCF FILES
         sed '/^#CHROM/q' `ls -1 *.vcf | head -1` > header.txt
@@ -133,7 +133,7 @@ process ReadOrientationLearn {
     output:
         tuple val(file_tag), path("*model.tar.gz"), emit : ROmodel
 
-    shell:
+    script:
         """
         # Build input_f1r2 argument dynamically in bash
         input_f1r2=""
@@ -157,7 +157,7 @@ process ContaminationEstimation {
 
     label 'mutect2'
 	    
-    publishDir "${params.output_folder}/mutect/contamination/", mode: 'copy'
+    publishDir "${params.output_folder}/mutect2/contamination/", mode: 'copy'
 
 	input:
         tuple val(file_tag), path(bamT), path(baiT), path(bamN), path(baiN)
@@ -167,8 +167,8 @@ process ContaminationEstimation {
 
 	output:
 	    tuple val(file_tag), path("*contamination.table"), emit: contam_tables
-	
-    shell:
+
+    script:
 	    """
         gatk --java-options "-Xmx${params.mem}G" GetPileupSummaries -R ${ref} -I $bamT -V $snp_contam -L $snp_contam -O ${bamT.baseName}_pileups.table
         gatk --java-options "-Xmx${params.mem}G" GetPileupSummaries -R ${ref} -I $bamN -V $snp_contam -L $snp_contam -O ${bamN.baseName}_pileups.table
@@ -187,7 +187,7 @@ process FilterMuTectOutputs {
 
     label 'mutect2'
 
-    publishDir "${params.output_folder}/mutect2/intermediate_calls/filtered", mode: 'copy'
+    publishDir "${params.output_folder}/mutect2/calls/", mode: 'copy'
 
     input:
         tuple val(tumor_normal_tag), path(vcf), path(stats), path(ROmodel), path(contam_tables)
@@ -197,7 +197,7 @@ process FilterMuTectOutputs {
     output:
         tuple val(tumor_normal_tag), path("*filtered.vcf{,.tbi}"), emit: calls
 
-    shell:
+    script:
         RO = (ROmodel.baseName=="NO_ROmodel") ? "": "--ob-priors " + ROmodel.join(" --ob-priors ")
         contam = (contam_tables.baseName == "NO_contam") ? "" : "--contamination-table " + contam_tables.join(" --contamination-table ")
         """
@@ -215,7 +215,7 @@ process FilterMuTectOutputsOnPass {
 
     label 'mutect2'
 
-    publishDir "$params.output_folder/mutect/PASS/", mode: 'copy'
+    publishDir "${params.output_folder}/mutect2/PASS/", mode: 'copy'
 
     input:
         tuple val(tumor_normal_tag), path(vcf_filtered)
@@ -223,7 +223,7 @@ process FilterMuTectOutputsOnPass {
     output:
         path("*_PASS.vcf*")
 
-    shell:
+    script:
         vcf_name = vcf_filtered[0].baseName
         """
         bcftools view -f PASS -O z ${vcf_filtered[0]} > ${vcf_name}_PASS.vcf.gz
@@ -245,7 +245,6 @@ workflow MUTECT2_CALL{
     indexes
     bed
     known_sites
-    snp_contam
 
     main:
 
@@ -262,17 +261,19 @@ workflow MUTECT2_CALL{
     mutectOutput = mutectOutput.join( ReadOrientationLearn.out )
 
     // Estimate contamination
-    if(snp_contam){
-        contamination = ContaminationEstimation(pairs,ref,indexes, snp_contam)
+    if(params.snp_contam){
+        contam = tuple (file(params.snp_contam), file(params.snp_contam +'.tbi'))
+        contamination = ContaminationEstimation(pairs,ref,indexes, contam)
         mutectOutput = mutectOutput.join(contamination)
     } else {
         mutectOutput = mutectOutput.map{row -> [row[0], row[1], row[2] , row[3], file("NO_contam") ]}
     }
     
     // filter
-    FilterMuTectOutputs(mutectOutput, ref, indexes) | FilterMuTectOutputsOnPass
+    FilterMuTectOutputs(mutectOutput, ref, indexes) //| FilterMuTectOutputsOnPass
 
     emit:
-    vcfs = FilterMuTectOutputs.out.calls
+    // Collect all VCFs for annotation and add mutect2 tag
+    vcfs = FilterMuTectOutputs.out.calls.map{ file_tag, vcf -> tuple(file_tag, vcf, "mutect2") }
 
 }

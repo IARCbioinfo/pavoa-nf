@@ -36,10 +36,12 @@ filter_variants <- function(tsv_file, vcf_file, sample) {
 
   # Step 1: Filter TSV
   filtered <- read_tsv(tsv_file, show_col_types = FALSE) %>%
-    filter(avsnp150 == ".",
-           ALL.sites.2015_08 == ".",
-           AMR.sites.2015_08 == ".",
-           avsnp150 == ".",
+    filter(#avsnp150 == ".",
+           across(matches("(?i)snp"), ~ .x == "."),
+           #ALL.sites.2015_08 == ".",
+           across(any_of(grep("(?i)ALL\\.sites", names(.), value = TRUE)), ~ .x == "."),
+           #AMR.sites.2015_08 == ".",
+           across(any_of(grep("(?i)AMR\\.sites", names(.), value = TRUE)), ~ .x == "."),
            Cov_N >= cov_n_thresh,
            Cov_T >= cov_t_thresh,
            VAF_T >= min_vaf_t_thresh,

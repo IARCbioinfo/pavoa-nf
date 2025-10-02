@@ -8,7 +8,7 @@ process MARK_DUPLICATES_UMI {
     tag "${file_tag}"
     label 'gatk'
 
-    publishDir "${params.output_folder}/QC/duplicates/", mode: 'copy', pattern: "${file_tag}_dedup.metrics"
+    publishDir "${params.output_folder}/QC/duplicates/", mode: 'copy', pattern: "*_mkdup.metrics"
 
     cpus 2
     memory "16.GB"
@@ -17,10 +17,11 @@ process MARK_DUPLICATES_UMI {
     tuple val(file_tag), path(bam), path(bai)
 
     output:
-    tuple val(file_tag), path("${file_tag}_dedup.bam"), path("${file_tag}_dedup.bam.bai"), emit: bam_files
-    path("${file_tag}_dedup.metrics"), emit: metrics
+    tuple val(file_tag), path("*_mkdup.bam"), path("*_mkdup.bam.bai"), emit: bam_files
+    path("*_mkdup.metrics"), emit: metrics
 
     script:
+    def file_tag_new = bam.baseName + '_mkdup'
     """
     set -euo pipefail
     
@@ -30,8 +31,8 @@ process MARK_DUPLICATES_UMI {
     gatk --java-options '-Xmx14G -Xms14G -Xss512k -XX:ReservedCodeCacheSize=512M -Djava.io.tmpdir=tmpdir' \\
         MarkDuplicates \\
         --INPUT ${bam} \\
-        --OUTPUT ${file_tag}_dedup.tmp.bam \\
-        --METRICS_FILE ${file_tag}_dedup.metrics \\
+        --OUTPUT ${file_tag_new}.tmp.bam \\
+        --METRICS_FILE ${file_tag_new}_mkdup.metrics \\
         --DUPLEX_UMI true \\
         --ASSUME_SORT_ORDER coordinate \\
         --READ_NAME_REGEX "(?:.*:)?([0-9]+)[^:]*:([0-9]+)[^:]*:([0-9]+)[^:]*\$" \\
@@ -39,19 +40,20 @@ process MARK_DUPLICATES_UMI {
         --VALIDATION_STRINGENCY LENIENT
     
     # Fix header if needed
-    samtools view -H ${file_tag}_dedup.tmp.bam > header.sam
+    samtools view -H ${file_tag_new}.tmp.bam > header.sam
     sed -i 's/SO:unknown/SO:coordinate/' header.sam
-    samtools reheader header.sam ${file_tag}_dedup.tmp.bam > ${file_tag}_dedup.bam
-    samtools index ${file_tag}_dedup.bam ${file_tag}_dedup.bam.bai
+    samtools reheader header.sam ${file_tag_new}.tmp.bam > ${file_tag_new}.bam
+    samtools index ${file_tag_new}.bam ${file_tag_new}.bam.bai
 
     # Cleanup
-    rm -f ${file_tag}_dedup.tmp.bam ${file_tag}_dedup.tmp.bai header.sam
+    rm -f ${file_tag_new}.tmp.bam ${file_tag_new}.tmp.bai header.sam
     rm -rf tmpdir
     """
     
     stub:
+    def file_tag_new = bam.baseName + '_mkdup'
     """
-    touch ${file_tag}_dedup.bam ${file_tag}_dedup.bam.bai ${file_tag}_dedup.metrics
+    touch ${file_tag_new}.bam ${file_tag_new}.bam.bai ${file_tag_new}.metrics
     """
 }
 
@@ -66,10 +68,11 @@ process MARK_DUPLICATES_STANDARD {
     tuple val(file_tag), path(bam), path(bai)
     
     output:
-    tuple val(file_tag), path("${file_tag}_dedup.bam"), path("${file_tag}_dedup.bam.bai"), emit: bam_files
-    path("${file_tag}_dedup.metrics"), emit: metrics
+    tuple val(file_tag), path("*_mkdup.bam"), path("*_mkdup.bam.bai"), emit: bam_files
+    path("*_mkdup.metrics"), emit: metrics
 
     script:
+    def file_tag_new = bam.baseName + '_mkdup'
     """
     set -euo pipefail
     
@@ -79,67 +82,27 @@ process MARK_DUPLICATES_STANDARD {
     gatk --java-options '-Xmx6G -Xms6G -Djava.io.tmpdir=tmpdir' \\
         MarkDuplicates \\
         --INPUT ${bam} \\
-        --OUTPUT ${file_tag}_dedup.bam \\
-        --METRICS_FILE ${file_tag}_dedup.metrics \\
+        --OUTPUT ${file_tag_new}.bam \\
+        --METRICS_FILE ${file_tag_new}.metrics \\
         --CREATE_INDEX true \\
         --VALIDATION_STRINGENCY LENIENT
-    
-    mv "${file_tag}_dedup.bai" "${file_tag}_dedup.bam.bai"
-    
+
+    samtools index ${file_tag_new}.bam ${file_tag_new}.bam.bai
+
     # Cleanup
     rm -rf tmpdir
     """
     
     stub:
+    def file_tag_new = bam.baseName + '_mkdup'
     """
-    touch ${file_tag}_dedup.bam ${file_tag}_dedup.bam.bai ${file_tag}_dedup.metrics
+    touch ${file_tag_new}.bam ${file_tag_new}.bam.bai ${file_tag_new}.metrics
     """
 }
 
-process MARK_DUPLICATES_STANDARD_CHR {
-    tag "${file_tag}"
-    label 'gatk'
-    
-    cpus 2
-    memory "8.GB"
-    
-    input:
-    tuple val(file_tag), val(chromosome), path(bam), path(bai)
-    
-    output:
-    tuple val(file_tag), val(chromosome), path("${output_prefix}_dedup.bam"), path("${output_prefix}_dedup.bam.bai"), emit: bam_files
-    path("${output_prefix}_dedup.metrics"), emit: metrics
-    
-    script:
-    output_prefix = "${file_tag}.${chromosome}"
-    
-    """
-    set -euo pipefail
-    
-    mkdir -p tmpdir
-    
-    # Standard duplicate marking by chromosome
-    gatk --java-options '-Xmx6G -Xms6G -Djava.io.tmpdir=tmpdir' \\
-        MarkDuplicates \\
-        --INPUT ${bam} \\
-        --OUTPUT ${output_prefix}_dedup.bam \\
-        --METRICS_FILE ${output_prefix}_dedup.metrics \\
-        --CREATE_INDEX true \\
-        --VALIDATION_STRINGENCY LENIENT
-    
-    # Cleanup
-    rm -rf tmpdir
-    """
-    
-    stub:
-    output_prefix = "${file_tag}.${chromosome}"
-    """
-    touch ${output_prefix}_dedup.bam ${output_prefix}_dedup.bam.bai ${output_prefix}_dedup.metrics
-    """
-}
 
 /***************************************************************************************/
-/************************  Process : mebase_quality_score_recalibrationrge *************/
+/************************  Process : base_quality_score_recalibration *************/
 /***************************************************************************************/
 
 process BQSR {
@@ -164,13 +127,13 @@ process BQSR {
     path(known_sites)
     
   output:
-    tuple val(file_tag), path("*_BQSRecalibrated.bam"), path("*_BQSRecalibrated.bam.bai"), emit: bamfiles
+    tuple val(file_tag), path("*_bqsr.bam"), path("*_bqsr.bam.bai"), emit: bamfiles
     path("*_recal.table"), emit: recal_table_files
     path("*plots.pdf"), emit: plots
 
-  shell:
+  script:
     def file_name = bam.baseName
-    def file_tag_new = file_name+'_BQSRecalibrated'
+    def file_tag_new = file_name+'_bqsr'
     def known_sites_args = known_sites.findAll { it.name.endsWith('.vcf.gz') }.collect { "--known-sites ${it}" }.join(' ')
     """
     gatk BaseRecalibrator --java-options "-Xmx${task.memory.toGiga()}G" -R $ref -I $bam ${known_sites_args} -O ${file_name}_recal.table
@@ -184,7 +147,7 @@ process BQSR {
 
   stub:
     def file_name = bam.baseName
-    def file_tag_new = file_name+'_BQSRecalibrated'
+    def file_tag_new = file_name+'_bqsr'
     """
     touch ${file_tag_new}.bam ${file_tag_new}.bam.bai
     touch ${file_tag_new}_recalibration_plots.pdf

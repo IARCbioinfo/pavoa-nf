@@ -161,7 +161,7 @@ process dupCallerCall{
     memory params.mem_dupcaller +'GB'
     cpus params.cpu_dupcaller
 
-    publishDir "${params.output_folder}/dupcaller/", mode: 'copy'
+    publishDir "${params.output_folder}/dupcaller/calls/", mode: 'copy'
 
     input:
         tuple val(file_tag), path(bamT), path(baiT), path(bamN), path(baiN)
@@ -183,7 +183,8 @@ process dupCallerCall{
     script:
         def germline = known_sites.findAll { it.name.endsWith('.vcf.gz') }.collect { "-g ${it}" }.join(' ')
         def noise_mask = (bed.baseName=="NO_BED") ? "" : "-m " + bed.join(" -m ")
-        def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
+        //def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
+        chromosome = ref.name.find('chr21') ? " -r chr21 " : ""
         """
         export MPLCONFIGDIR="$mplDir"
         DupCaller.py call -tt 30 -b $bamT -n $bamN -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask ${chromosome}
@@ -243,7 +244,7 @@ process DUPCALLER_ESTIMATE{
     memory 1+'GB'
     cpus 4
 
-    publishDir "${params.output_folder}/filtered/", mode: 'copy'
+    publishDir "${params.output_folder}/dupcaller/filtered/", mode: 'copy'
 
     input:
         tuple val(file_tag), path(snvs), path(indels), path(trinuc)
@@ -254,7 +255,8 @@ process DUPCALLER_ESTIMATE{
         path("${file_tag}/*")
 
     script:
-        def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
+        //def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
+        chromosome = ref.name.find('chr21') ? " -r chr21 " : ""
         """
         mkdir -p "${file_tag}"
         mv ${file_tag}_* ${file_tag}/.
@@ -292,7 +294,7 @@ workflow DUPCALLER_CALL{
     fixDupcallerOutput(snvindels)
     
     emit:
-    vcfs = fixDupcallerOutput.out.vcfs
+    vcfs = fixDupcallerOutput.out.vcfs.map{ file_tag, vcf -> tuple(file_tag, vcf, "dupcaller") }
     trinuc = dupCallerCall.out.trinuc
 
 }

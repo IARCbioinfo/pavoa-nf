@@ -324,38 +324,33 @@ reverseComplement <- function(change_strand, ctx) {
 
 reverseComplement_V <- Vectorize(reverseComplement)
 
-# annotate_SNP
+
 annotate_SNP <- function(dff) {
-  # annotate human snp
+  # Find SNP column: avsnp## for human, snp## for other species
+  snp_col <- names(dff)[grepl("^avsnp\\d+$", names(dff))]
+  if (length(snp_col) == 0) {
+    snp_col <- names(dff)[grepl("^snp\\d+$", names(dff))]
+  }
+  # Default: not SNP
+  dff$is_SNP <- 0
+  # If SNP column found, annotate
+  if (length(snp_col) > 0) {
+    dff$is_SNP <- ifelse(dff[[snp_col[1]]] != ".", 1, 0)
+  }
+
+  # For human, check additional frequency columns if present
   if ("ALL.sites.2015_08" %in% names(dff)) {
-    dff <- dff %>% mutate(is_SNP = ifelse(ALL.sites.2015_08 >= 0.001 |
-      ExAC_nontcga_ALL >= 0.001 |
-      gnomAD_genome_ALL >= 0.001 |
-      esp6500siv2_all >= 0.00001, 1, 0))
+    dff$is_SNP <- ifelse(dff$ALL.sites.2015_08 >= 0.001 | dff$is_SNP == 1, 1, 0)
   }
-  # annotate mouse snp
-  if ("snp142" %in% names(dff)) {
-    dff <- dff %>% mutate(is_SNP = ifelse(snp142 == ".", 0, 1))
+  if ("ExAC_nontcga_ALL" %in% names(dff)) {
+    dff$is_SNP <- ifelse(dff$ExAC_nontcga_ALL >= 0.001 | dff$is_SNP == 1, 1, 0)
   }
-
-  # annotate rat rn6 snp
-  if ("snp146" %in% names(dff)) {
-    dff <- dff %>%
-      mutate(is_SNP = ifelse(snp146 == ".", 0, 1)) %>%
-      mutate(is_rpt = 0) %>%
-      mutate(is_blacklist = 0) %>%
-      mutate(is_hpoly = 0, is_str = 0)
+  if ("gnomAD_genome_ALL" %in% names(dff)) {
+    dff$is_SNP <- ifelse(dff$gnomAD_genome_ALL >= 0.001 | dff$is_SNP == 1, 1, 0)
   }
-
-  # annotate rat rn7 snp
-  if ("snp" %in% names(dff)) {
-    dff <- dff %>%
-      mutate(is_SNP = ifelse(snp == ".", 0, 1)) %>%
-      mutate(is_rpt = ifelse(trf == ".", 0, 1)) %>%
-      mutate(is_blacklist = ifelse(rmk == ".", 0, 1)) %>%
-      mutate(is_hpoly = 0, is_str = 0)
+  if ("esp6500siv2_all" %in% names(dff)) {
+    dff$is_SNP <- ifelse(dff$esp6500siv2_all >= 0.00001 | dff$is_SNP == 1, 1, 0)
   }
-
   return(dff)
 }
 
@@ -393,8 +388,7 @@ file_annot <- function(df) {
     mutate(clps_strand = substr(clps_tx_status, 1, 1)) %>%
     # Annotate SNP
     annotate_SNP()
-
-  return(df_var)
+    return(df_var)
 }
 
 ##################################
@@ -411,7 +405,7 @@ print(paste0("Output file name : ", out))
 multianno <- multianno %>% read_tsv()
 multianno <- multianno %>% order_variants()
 multianno <- multianno %>% set_caller_name()
-multianno <- multianno %>% dplyr::filter(ALT!=".") 
+multianno <- multianno %>% dplyr::filter(ALT != ".")
 multianno <- multianno %>% getStrand()
 multianno <- multianno %>% getContextAnnotation()
 multianno <- multianno %>% get_VAF()

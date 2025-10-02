@@ -23,10 +23,11 @@ process fastq_alignment {
     label 'alignment'
     
     cpus params.cpu
-    memory params.mem+'GB'    
+    memory params.mem+'GB'
 
-    if(!params.recalibration){ 
-        publishDir "${params.output_folder}/BAM/", mode: 'copy'	
+    publishDir "${params.output_folder}/BAM/", mode: 'copy', saveAs: {filename ->
+        if(!params.bqsr) filename
+        else null
     }
 
     input:
@@ -90,8 +91,10 @@ process bam_realignment {
     cpus params.cpu
     memory params.mem + 'G'
         
-    if(!params.recalibration) {
-        publishDir "${params.output_folder}/BAM/", mode: 'copy'
+
+    publishDir "${params.output_folder}/BAM/", mode: 'copy', saveAs: {filename ->
+        if(!params.bqsr) filename
+        else null
     }
 
     input:
@@ -129,7 +132,7 @@ process bam_realignment {
     """
     set -o pipefail
     
-    samtools collate -uOn 128 ${infile} tmp_${file_tag} | \\
+    samtools collate -uOn 128 ${file_tag} tmp_${file_tag} | \\
     samtools fastq - | \\
     bwa-mem2 mem ${bwa_opt} -t${bwa_threads} -R ${read_group} -p ${ref} - | \\
     ${postalt} samblaster ${samblaster_opt} --addMateTags --ignoreUnmated | \\
@@ -186,6 +189,7 @@ workflow ALIGNMENT {
 
     main:
     //TODO: Determine mode based on input type
+    mode = 'fastq'
     //mode = input_ch.hasType(Tuple) ? 'fastq' : 'bam'
     if (mode == 'fastq') {
         FASTQ_ALIGNMENT(input_ch, reference_ch, indexes_ch)

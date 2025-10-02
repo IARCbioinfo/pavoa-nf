@@ -79,9 +79,11 @@ Add `--annovarDBlist hg38_listAVDB.txt` to your pavoa-nf command.
 
 #### Outputs
 
-| Name | Description |
-|------|-------------|
-| --output_folder | Output folder for results |
+| Name | Default value | Description |
+|------|---------------|--------------|
+| --output_folder | pavoa_output | Output folder for results |
+
+> 💡 Tip: this parameters is mandatory if you run a --recall analysis.
 
 ### Ressources
 
@@ -91,23 +93,31 @@ Add `--annovarDBlist hg38_listAVDB.txt` to your pavoa-nf command.
 | --mem | 32 | memory (GB) |
 | --cpu_bqsr | 2  | number of CPUs for GATK base quality score recalibration |
 | --mem_bqsr | 10 | memory for GATK base quality score recalibration (GB) |
-
+| --cpu_dupcaller | 64 | CPUs for DupCaller |
+| --mem_dupcaller | 32 | Memory for DupCaller (GB) |
 
 ### Trimming options
 
 | Name | Default value | Description |
 |------|---------------|-------------|
-| --trim | |enable adapter sequence trimming |
+| --umi | NNNNNNNN | Enable UMI-aware duplicate marking. You may pass a TAG or keep default if used as a flag |
+| --trim | true | enable adapter sequence trimming |
 | --adapter | illumina | adapter type (illumina, nextera, etc.) |
 | --length | 30 | Minimum read length after trimming |
 | --quality | 30 | Minimum read quality after trimming |
 
-### Processing Options
+### Mapping Options
 
 | Name | Default value | Description |
 |------|---------------|-------------|
-| --bqsr | | Enable base quality score recalibration |
-| --umi | NNNNNNNN | Enable UMI-aware duplicate marking. You may pass a TAG or keep default if used as a flag |
+| --bwa_option_m | true | Use -M option in BWA and Samblaster (for Picard compatibility) |
+| --pl | ILLUMINA | Plateforme name for RG group
+| --bqsr | true | Enable base quality score recalibration |
+| --known_sites | none | VCF file, known variants to filter |
+| --snp_contam  | none | For contamination estimation with mutect |
+| --recall | false | Run only calling (bam files must be available in output_folder ) |
+
+> 💡 Tip: if --umi is used, then --bqsr automatically is set to false. 
 
 ### Quality Control
 
@@ -116,32 +126,57 @@ Add `--annovarDBlist hg38_listAVDB.txt` to your pavoa-nf command.
 | --feature_file | Feature file (bed) for Qualimap |
 | --multiqc_config | MultiQC configuration file |
 
-### Known Sites and Masking
+### Dupcaller
 
 | Name | Description |
 |------|-------------|
-| --known_sites | VCF file, known variants to filter |
 | --mask | BED file, regions to ignore during calling |
+
+### Strelka
+
+| Name | Description |
+|------|-------------|
+| --strelka | true | Use strelka2 for calling |
+| --strelka_bin | | Path to strelka binary directory |
+| --strelka_config | | Path to strelka config file |
+| --exome | false | activate strelka options for exome data |
+
+> 💡 Tip: If you are using apptainer profil, --strelka_bin and --strelka_config are set up by default.
+
+> 💡 Tip: with --umi, strelka2 is desactivated.
+
+### Mutect
+
+| Name | Description |
+|------|-------------|
+| --mutect2 | true | Use Mutect2 for calling |
+| --mutect_args | none | Additional argument to pass to mutect2 |
+| --nsplit | 1000 | For Parallelisation |
+
+> 💡 Tip: with --umi, mutect2 is desactivated.
 
 ### Annotation
 
-| Name | Description |
-|------|-------------|
+| Name | Default value | Description |
+|------|---------------|-------------|
 | --annovarDBlist  | File with two columns : protocols and operations [see example](assets/demo/hg38_listAVDB.txt) |
-| --annovarDBpath  | Path to your annovarDB |
-| --annovarBinPath | Path to table_annovar.pl |
+| --annovarDBpath  | /data/databases/annovar/hg38db/ | Path to your annovarDB |
+| --annovarBinPath | ~/bin/annovar/ | Path to table_annovar.pl |
+| --pass | 'PASS' | filter flags, as a comma separated list |
+
+> 💡 Tip: No container for annovar, you have to install it.
 
 ### Filtering
 
-| Name | Default value | Description |
-|------|---------------|-------------|
-| --cov_n_thresh     | 10  | Minimum coverage in the normal sample for at given position |
-| --cov_t_thresh     | 10  | Minimum coverage in the tumor sample for at givien position |
-| --min_vaf_t_thresh | 0.1 | Minimum Variant Allele Frequency in tumor sample |
-| --max_vaf_t_thresh | 1   | Maximum Variant Allele Frequency in tumor sample |
-| --cov_alt_t_thresh | 3   | Minimum number of read that support the alternative allele in tumor |
+| Name | Default value | with --umi | Description |
+|------|---------------|------------|-------------|
+| --cov_n_thresh     | 10  | 1 | Minimum coverage in the normal sample for at given position |
+| --cov_t_thresh     | 10  | 1 | Minimum coverage in the tumor sample for at givien position |
+| --min_vaf_t_thresh | 0.1 | 0 | Minimum Variant Allele Frequency in tumor sample |
+| --max_vaf_t_thresh | 1   | 1 | Maximum Variant Allele Frequency in tumor sample |
+| --cov_alt_t_thresh | 3   | 1 | Minimum number of read that support the alternative allele in tumor |
 
-
+> 💡 Tip: Default values change with --umi tag.
 
 ## Usage
 
@@ -155,14 +190,13 @@ nextflow run iarcbioinfo/pavoa-nf -profile singularity --input_file input.txt --
 
 ### Complete variant calling workflow
 
-For a complete variant calling workflow with preprocessing, alignment, variant calling, and annotation:
+For a complete variant calling workflow with preprocessing, alignment, variant calling with mutect and strelka, and annotation:
 
 ```bash
 nextflow run iarcbioinfo/pavoa-nf -profile apptainer \
   --input_file input.txt \
   --ref hg38.fasta \
   --trim \
-  --bqsr \
   --known_sites dbsnp_138.hg38.vcf.gz \
   --known_sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
   --annovarDBlist hg38_listAVDB.txt
@@ -174,8 +208,8 @@ For dual index sequencing (UDseq)
 nextflow run iarcbioinfo/pavoa-nf -profile apptainer \
   --input_file input.txt \
   --ref hg38.fasta \
-  --trim \
   --umi \
+  --trim \
   --known_sites dbsnp_138.hg38.vcf.gz \
   --known_sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
   --annovarDBlist hg38_listAVDB.txt
@@ -183,28 +217,17 @@ nextflow run iarcbioinfo/pavoa-nf -profile apptainer \
 
 ### Run only calling
 
-The pair.txt file is a tabular file with three columns : SD (sample ID), normal (BAM file path), tumor (BAM file path).
+To run only the calling from a previous analysis located in pavoa_output folder.
 
 ```bash
 nextflow run IARCbioinfo/pavoa-nf -entry dupcaller -profile apptainer \
-  --input_file pairs.txt \
+  --input_file input.txt \
+  --output_folder pavoa_output
   --ref hg38.fasta \
+  --recall \
+  --known_sites dbsnp_138.hg38.vcf.gz \
+  --known_sites Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
   --annovarDBlist hg38_listAVDB.txt
-```
-
-### Run only filtering
-
-You can rerun filtering step only by providing a pavoa output directory.
-
-```bash
-nextflow run IARCbioinfo/pavoa-nf -entry filter_vcf -profile apptainer \
-  --input_folder pavoa_output \
-  --ref hg38.fasta \
-  --cov_n_thresh 10 \
-  --cov_t_thresh 10 \
-  --min_vaf_t_thresh 0.1 \
-  --max_vaf_t_thresh 1 \
-  --cov_alt_t_thresh 3
 ```
 
 
@@ -214,13 +237,20 @@ nextflow run IARCbioinfo/pavoa-nf -entry filter_vcf -profile apptainer \
 |------|-------------|
 | /    | Annotated variants in vcf and tabular format |
 | BAM/ | folder with BAM and BAI files of alignments |
-| dupcaller/ | folder with VCF files containing raw called variants |
-| annotation/ | Annotated variants, VCF and TSV files |
-| filtered/ | filtered variants |
 | QC/fastq/ | read quality reports after trimming |
 | QC/BAM/ | alignment quality control reports |
 | QC/duplicates/ | variant calling quality control reports |
 | QC/multiqc_report.html | comprehensive MultiQC report |
+| mutect2/    | Mutect2 outputs |
+| mutect2/raw_calls/ | unflagged vcf |
+| mutect2/stats | info files from mutect calling |
+| strelka2/   | Strelka2 outputs |
+| strelka2/CallablRegions | Callable regions (bed) |
+| dupcaller/ | Dupcaller outputs |
+| */calls/ | final vcf |
+| */calls/annovar/ | raw annovar annotations |
+| */calls/annotations/ | filtered annovar annotations +context +strand |
+| */calls/filtered.1 | final filtered vcf |
 | index | index files if they have been generated during process |
 | nf-pipeline_info/ | log files from all pipeline steps |
 
@@ -231,8 +261,22 @@ nextflow run IARCbioinfo/pavoa-nf -entry filter_vcf -profile apptainer \
 output/
 ├── BAM/
 ├── dupcaller/
-├── annotation/
-├── filtered/
+│   ├── calls/
+│   │   ├── annovar/
+│   │   ├── annotations/
+│   │   ├── filtered.1/
+├── mutetc2/
+│   ├── raw_calls/
+│   ├── calls/
+│   │   ├── annovar/
+│   │   ├── annotations/
+│   │   ├── filtered.1/
+├── strelka2/
+│   ├── CallableRegions/
+│   ├── calls/
+│   │   ├── annovar/
+│   │   ├── annotations/
+│   │   ├── filtered.1/
 ├── QC/
 │   ├── fastq
 │   ├── BAM/
@@ -253,14 +297,16 @@ The pavoa-nf pipeline performs the following major steps:
    
 2. **Alignment (A)**
    - Read alignment to reference genome (BWA-MEM2)
-   - Duplicate marking (samblaster or MarkDuplicate)
+   - Duplicate marking (MarkDuplicate)
    - Sorting and indexing (sambamba)
    - Base quality score recalibration (optional, GATK)
    - Alignment quality control (Qualimap)
 
 3. **Variant calling (V)**
    - Variant calling using selected caller:
-     - Dupcaller call (somatic variants, UDseq)
+     - Dupcaller
+     - Mutect2
+     - Strelka2
 
 4. **Optimization (O)**
 
