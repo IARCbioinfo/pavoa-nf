@@ -13,12 +13,16 @@ suppressPackageStartupMessages(library(GetoptLong))
 suppressPackageStartupMessages(library(Biostrings))
 suppressPackageStartupMessages(library(parallel))
 
-annovarDBpath <- "/data/databases/annovar/mm10db"
+annovarDBpath <- "/data/databases/annovar/mm10db/"
 
-GetoptLong(matrix(c("annovarDBpath|a=s", "path to annovarDB"), ncol = 2, byrow = TRUE))
+GetoptLong("annovarDBpath|a=s", "path to annovarDB",
+           "reference|r=s", "reference fasta file")
 
 annovarDB <- basename(annovarDBpath)
-reference <- gsub("db", "", annovarDB)
+build <- gsub("db", "", annovarDB)
+print(annovarDB)
+print(build)
+print(reference)
 
 ##########################################
 # order_variants
@@ -42,7 +46,7 @@ order_variants<-function(tab){
 get_caller_name <- function(headers) {
 
   print("get_caller_name")
-  callers=c("strelka", "Mutect2", "octopus", "needlestack","dupcaller")
+  callers=c("strelka", "Mutect2", "octopus", "needlestack", "dupcaller")
   for (caller in callers) {
     if (any(grepl(caller, headers))) {
       return(caller)
@@ -53,13 +57,15 @@ get_caller_name <- function(headers) {
 
 ##########################################
 # set_caller_name
-set_caller_name<-function(tab,dir="./"){
+set_caller_name <- function(tab, dir = "./") {
 
   print("set_caller_name")
-  vcffile<-list.files(path = dir, pattern=".vcf")
+  vcffile <- list.files(path = dir,
+                        pattern = ".vcf$|.vcf.gz$",
+                        full.names = TRUE)[1]
   vcffile <- readLines(vcffile)
   header_lines <- vcffile[startsWith(vcffile, "##")]
-  tab %>% mutate(caller= get_caller_name(header_lines) )
+  tab %>% mutate(caller = get_caller_name(header_lines) )
 }
 
 ##########################################
@@ -73,7 +79,7 @@ getStrand <- function(avtmp) {
   }
 
   #Get strand information for each genes in refGene
-  refGene <- fread(paste0(annovarDBpath, "/", reference, "_refGene.txt"))
+  refGene <- fread(paste0(annovarDBpath, "/", build, "_refGene.txt"))
   tmp <- unique(refGene[, c(13, 4)])
   colnames(tmp) <- c("symbol", "Strand")
   dup <- tmp$symbol[duplicated(tmp$symbol)]
@@ -96,8 +102,9 @@ getStrand <- function(avtmp) {
 getContextAnnotation <- function(avtmp) {
 
   print("getContextAnnotation")
-  reffile <- list.files(path = annovarDBpath, pattern = paste0(reference, ".fa"), full.names = T)
-  ref <- readDNAStringSet(reffile)
+  #reference <- list.files(path = annovarDBpath, pattern = paste0(build, ".fa"), full.names = T)
+  ref <- readDNAStringSet(reference)
+  names(ref) <- sapply(strsplit(names(ref), " "), `[`, 1)
   setDT(avtmp)
   avtmp[, context := getContext(ref, CHROM, POS, 10)]
   avtmp$context <- as.character(avtmp$context)
@@ -106,8 +113,29 @@ getContextAnnotation <- function(avtmp) {
   return(as_tibble(avtmp))
 }
 
+#getContext <- function(ref, chr, pos, win) {
+#  return(mclapply(1:length(chr), function(x) toString(subseq(ref[[chr[x]]], max(1, as.numeric(pos[x]) - win), min(length(ref[[chr[x]]]), as.numeric(pos[x]) + win)))))
+#}
+
 getContext <- function(ref, chr, pos, win) {
-  return(mclapply(1:length(chr), function(x) toString(subseq(ref[[chr[x]]], max(1, as.numeric(pos[x]) - win), min(length(ref[[chr[x]]]), as.numeric(pos[x]) + win)))))
+  chr <- as.character(chr)
+  pos <- as.numeric(pos)
+  
+  # Vectoriser le calcul
+  contexts <- sapply(1:length(chr), function(i) {
+    if (!chr[i] %in% names(ref)) {
+      return(NA_character_)
+    }
+    
+    chr_seq <- ref[[chr[i]]]
+    chr_len <- length(chr_seq)
+    start <- max(1, pos[i] - win)
+    end <- min(chr_len, pos[i] + win)
+    
+    toString(subseq(chr_seq, start, end))
+  })
+  
+  return(contexts)
 }
 
 #######################################################
@@ -335,22 +363,26 @@ annotate_SNP <- function(dff) {
   dff$is_SNP <- 0
   # If SNP column found, annotate
   if (length(snp_col) > 0) {
-    dff$is_SNP <- ifelse(dff[[snp_col[1]]] != ".", 1, 0)
+    dff$is_SNP <- ifelse( dff[[snp_col[1]]] != ".", 1, 0)
   }
 
   # For human, check additional frequency columns if present
   if ("ALL.sites.2015_08" %in% names(dff)) {
     dff$is_SNP <- ifelse(dff$ALL.sites.2015_08 >= 0.001 | dff$is_SNP == 1, 1, 0)
   }
-  if ("ExAC_nontcga_ALL" %in% names(dff)) {
+  if ("ExAC_ALL" %in% names(dff)) {
     dff$is_SNP <- ifelse(dff$ExAC_nontcga_ALL >= 0.001 | dff$is_SNP == 1, 1, 0)
   }
-  if ("gnomAD_genome_ALL" %in% names(dff)) {
+  if ("gnomad*_genome_AF" %in% names(dff)) {
+    dff$is_SNP <- ifelse(dff$gnomad41_genome_AF >= 0.001 | dff$is_SNP == 1, 1, 0)
+  }
+  if ("gnomad*_genome_ALL" %in% names(dff)) {
     dff$is_SNP <- ifelse(dff$gnomAD_genome_ALL >= 0.001 | dff$is_SNP == 1, 1, 0)
   }
-  if ("esp6500siv2_all" %in% names(dff)) {
+  if ("esp6500siv2" %in% names(dff)) {
     dff$is_SNP <- ifelse(dff$esp6500siv2_all >= 0.00001 | dff$is_SNP == 1, 1, 0)
   }
+
   return(dff)
 }
 

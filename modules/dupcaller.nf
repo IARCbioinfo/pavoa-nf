@@ -183,11 +183,12 @@ process dupCallerCall{
     script:
         def germline = known_sites.findAll { it.name.endsWith('.vcf.gz') }.collect { "-g ${it}" }.join(' ')
         def noise_mask = (bed.baseName=="NO_BED") ? "" : "-m " + bed.join(" -m ")
-        //def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
-        chromosome = ref.name.find('chr21') ? " -r chr21 " : ""
+        def chromosome = ref.name.find('chr21') ? " -r chr21 " : ""
+        chromosome = ref.name.find('mm') ? " -r \"chr{1..19} chrX, chrY\" " : chromosome
+        def mode = bamN.baseName == 'germline' ? '--maxAF 0.1' : '-n ' + bamN
         """
         export MPLCONFIGDIR="$mplDir"
-        DupCaller.py call -tt 30 -b $bamT -n $bamN -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask ${chromosome}
+        DupCaller.py call -tt 30 -b $bamT $mode -f $ref -o ${file_tag} -p $task.cpus $germline $noise_mask ${chromosome}
         DupCaller.py estimate -i ${file_tag} -f $ref ${chromosome}
         """
 
@@ -217,22 +218,24 @@ process fixDupcallerOutput{
         tuple val(file_tag), path(calls)
 
     output:
-        tuple val(file_tag), path("${file_tag}_*.fixed.vcf.gz"), emit: vcfs
+        tuple val(file_tag), path("fixed/${file_tag}_*.vcf.gz"), emit: vcfs
 
     script:
-        def out = calls.baseName + ".fixed.vcf"
+        def out = calls.getName()
         """
         # add GT tag for annovar
+        mkdir fixed
         first_format_num=\$(grep -n -m 1 '##FORMAT' "$calls" | cut -d : -f 1)
-        sed "\${first_format_num}a##FORMAT=<ID=GT,Number=1,Type=String,Description=\\"Genotype\\">" "$calls" > "$out"
-        sed -E 's/(AC:RC:DP[[:space:]]+)([^:]+:[^:]+:[^:]+)[[:space:]]+([^:]+:[^:]+:[^:]+)/GT:\\10\\/1:\\2\\t0\\/0:\\3/' "$calls" > "$out"
-        gzip -f $out
+        sed "\${first_format_num}a##FORMAT=<ID=GT,Number=1,Type=String,Description=\\"Genotype\\">" "$calls" > "fixed/$out"
+        sed -E -i 's/(AC:RC:DP[[:space:]]+)([^:]+:[^:]+:[^:]+)[[:space:]]+([^:]+:[^:]+:[^:]+)/GT:\\10\\/1:\\2\\t0\\/0:\\3/' "fixed/$out"
+        gzip -f "fixed/$out"
         """
 
     stub:
-        def out = calls.baseName + ".fixed.vcf"
+        def out = calls.getName()
         """
-        touch "${out}.gz"
+        mkdir fixed
+        touch "fixed/${out}"
         """
 }
 
@@ -244,7 +247,7 @@ process DUPCALLER_ESTIMATE{
     memory 1+'GB'
     cpus 4
 
-    publishDir "${params.output_folder}/dupcaller/filtered/", mode: 'copy'
+    publishDir "${params.output_folder}/dupcaller/calls/filtered.1/", mode: 'copy'
 
     input:
         tuple val(file_tag), path(snvs), path(indels), path(trinuc)
@@ -255,8 +258,9 @@ process DUPCALLER_ESTIMATE{
         path("${file_tag}/*")
 
     script:
-        //def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
+        def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
         chromosome = ref.name.find('chr21') ? " -r chr21 " : ""
+
         """
         mkdir -p "${file_tag}"
         mv ${file_tag}_* ${file_tag}/.

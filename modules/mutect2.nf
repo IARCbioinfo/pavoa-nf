@@ -57,7 +57,7 @@ process mutect {
         def input_t = "-I " + bamT.join(" -I ")
         def input_n = (bamN.baseName == 'None') ? "" : "-I ${bamN} -normal \$normal_name"
         def KS_vcf = known_sites.find { !it.name.endsWith(".tbi") }
-        def KS_option = KS_vcf ? "--germline-resource ${KS_vcf}" : ""
+        def KS_option = KS_vcf ? "--germline-resource " + KS_vcf.join(" --germline-resource ") : ""
         def PON_option = (PON.baseName == 'NO_FILE') ? "" : "--panel-of-normals ${PON.getAt(0)}"
         """
         normal_name=`samtools view -H $bamN | grep "^@RG" | head -1 | awk '{print \$NF}' | cut -c 4-`

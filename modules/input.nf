@@ -160,7 +160,7 @@ workflow PREPARE_INPUT_FROM_TSV {
                 row.RG,                                       // Read Group ID
                 file(row.pair1),                              // First pair file
                 row.pair2 ? file(row.pair2) : file("SINGLE"), // Second pair file or SINGLE
-                row.sample ? file(row.sample) : "NO_NORMAL"            // normal sample (optional, can be empty)
+                row.normal ? file(row.normal) : "NO_NORMAL"            // normal sample (optional, can be empty)
             )
         }
     
@@ -230,7 +230,7 @@ workflow PREPARE_CALLING_INPUT {
 
     //alignments.view()
     alignments_ch = alignments.flatten().collate(3).map { it -> tuple(it[0], it[1], it[2]) }
-    //alignments_ch.view()
+        .concat(Channel.of(["germline", file("germline"), file("germline.bai")])) // fake germline for normal-less samples
 
     // Channel of (tumor_sample, normal_sample)
     sample_pairs = Channel
@@ -239,7 +239,6 @@ workflow PREPARE_CALLING_INPUT {
         .filter { row -> row.normal } // Only keep samples with matched normals
         .map { row -> tuple(row.SM, row.normal) }
         .unique()
-    //sample_pairs.view()
 
     // First join: get tumor sample alignments
     tumor_aligned = sample_pairs
@@ -250,8 +249,7 @@ workflow PREPARE_CALLING_INPUT {
         .map { tumor_sample, normal_sample, tumor_bam, tumor_bai ->
             tuple(normal_sample, tumor_sample, tumor_bam, tumor_bai)
         }
-    //tumor_aligned.view()
-
+        //tumor_aligned.view()
 
     // Second join: get normal sample alignments
     full_pairs = tumor_aligned
@@ -260,7 +258,6 @@ workflow PREPARE_CALLING_INPUT {
             tuple(tumor_sample, tumor_bam, tumor_bai, normal_bam, normal_bai)
         }
 
-    //full_pairs.view()
 
     emit:
     pairs = full_pairs

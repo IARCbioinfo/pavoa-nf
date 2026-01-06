@@ -59,6 +59,7 @@ params.bqsr                = params.umi ? false : true
 params.known_sites         = []
 params.snp_contam          = null
 params.recall              = false  // Skip alignment step and use existing BAM files in project folder.
+params.reannot             = false 
 
 // QC
 params.feature_file        = 'NO_FILE'
@@ -69,13 +70,13 @@ params.mask                = null
 // params.chromosome = null
 
 // strelka2
-params.strelka2 = true
+params.strelka2 = params.umi ? false : true
 params.strelka_bin = "/opt/conda/envs/strelka2-nf/share/strelka-2.9.10-0/bin/"
 params.strelka_config = null
 params.exome = false
 
 // mutect2
-params.mutect2 = true
+params.mutect2 = params.umi ? false : true
 params.mutect_args = ""
 params.PON = null
 params.nsplit = 1000
@@ -87,11 +88,12 @@ params.annovarBinPath = "~/bin/annovar/"
 params.pass = "'PASS'"
 
 // Filtering parameters
-params.cov_n_thresh        = params.umi ? 1 : 10      // Normal coverage threshold
-params.cov_t_thresh        = params.umi ? 1 : 10      // Tumor coverage threshold  
-params.min_vaf_t_thresh    = params.umi ? 0 : 0.1     // Min Tumor VAF threshold
-params.max_vaf_t_thresh    = 1                        // Max Tumor VAF threshold
-params.cov_alt_t_thresh    = params.umi ? 1 : 3       // Tumor alternative allele coverage threshold
+params.cov_n_thresh         = params.umi ? 1 : 10    // Normal coverage threshold
+params.cov_t_thresh         = params.umi ? 1 : 10    // Tumor coverage threshold  
+params.min_vaf_t_thresh     = params.umi ? 0 : 0.1   // Min Tumor VAF threshold
+params.max_vaf_t_thresh     = 1                      // Max Tumor VAF threshold
+params.min_cov_alt_t_thresh = params.umi ? 1 : 3     // Min Tumor alternative allele coverage threshold
+params.max_cov_alt_t_thresh = params.umi ? 1 : 1000  // Max Tumor alternative allele coverage threshold
 
 // Help message
 params.help                = false
@@ -179,7 +181,8 @@ def helpMessage() {
     --cov_t_thresh     INT    Coverage threshold in Tumor sample(default: 10)
     --min_vaf_t_thresh FLOAT  Min VAF threshold in Tumor sample (default: 0.1)
     --max_vaf_t_thresh FLOAT  Max VAF threshold in Tumor sample (default: 1)
-    --cov_alt_t_thresh INT    Alternative allele coverage threshold in sample (default: 3)
+    --min_cov_alt_t_thresh INT    Min alternative allele coverage threshold in sample (default: 3)
+    --max_cov_alt_t_thresh INT    Max alternative allele coverage threshold in sample (default: 1000)
 
     """.stripIndent()
 }
@@ -246,7 +249,8 @@ def logParameters() {
     Tumor cov thresh     : ${params.cov_t_thresh}
     Min VAF thresh       : ${params.min_vaf_t_thresh}
     Max VAF thresh       : ${params.max_vaf_t_thresh}
-    alt cov thresh       : ${params.cov_alt_t_thresh}
+    Min alt cov thresh   : ${params.min_cov_alt_t_thresh}
+    Max alt cov thresh   : ${params.max_cov_alt_t_thresh}
     ========================================================================
     """
 }
@@ -300,7 +304,7 @@ workflow {
     logParameters()
 
     //check if params.input_file exists
-    if (!params.input_file) {
+    if (!params.input_file && !params.reannot) {
         error "Either --input_folder or --input_file must be specified"
         def input_file = file(params.input_file)
         if (!input_file.exists()) {
@@ -309,7 +313,7 @@ workflow {
     }
 
     //check if params.ref is specified and exists
-    if (!params.ref) {
+    if (!params.ref && !params.reannot) {
         error "--ref must be specified"
         def ref_file = file(params.ref)
         if (!ref_file.exists()) {
@@ -365,8 +369,10 @@ workflow {
     samples = Channel.empty() // Initialize empty channel for reports
     
     // Prepare input samples
-    PREPARE_INPUT_FROM_TSV(params.input_file)
-    samples = PREPARE_INPUT_FROM_TSV.out.reads
+    if (params.input_file) {
+        PREPARE_INPUT_FROM_TSV(params.input_file)
+        samples = PREPARE_INPUT_FROM_TSV.out.reads
+    }
 
     // Prepare reference files
     PREPARE_REFERENCES(params.ref, params.bwa_index_dir, params.output_folder)
@@ -383,7 +389,7 @@ workflow {
     // Prepare feature file
     feature_file = (params.feature_file) ? file(params.feature_file) : file("NO_FEATURE")
 
-    if(!params.recall){
+    if(!params.recall && !params.reannot){
         // MAPPING
         MAPPING(samples, ref, indexes, known_sites, feature_file)
         alignments = MAPPING.out.final_alignment.collect()
@@ -394,15 +400,63 @@ workflow {
             def bam_name = bam.baseName
                 .replaceAll("_mkdup","")
                 .replaceAll("_bqsr","")
+                .replaceAll("_dedup","")
+                .replaceAll("_BQSRecalibrated","")
             tuple(bam_name, bam, file("${bam}.bai")) }
     }
 
-    // Organise Samples for Calling
-    PREPARE_CALLING_INPUT(params.input_file, alignments)
-    pairs = PREPARE_CALLING_INPUT.out.pairs
+    if(!params.reannot){
+        // Organise Samples for Calling
+        PREPARE_CALLING_INPUT(params.input_file, alignments)
+        pairs = PREPARE_CALLING_INPUT.out.pairs
+        pairs.view()
 
-    // CALLING
-    CALLING(pairs, ref, indexes, known_sites, feature_file)
+        // CALLING
+        CALLING(pairs, ref, indexes, known_sites, feature_file)
+        all_vcfs = CALLING.out.all_vcfs
+        dupcaller_trinuc=CALLING.out.trinuc
+        
+    }else{
+        log.info("debug: reannot only")
+        // Instead of running CALLING, collect existing VCF files
+        mutect_vcfs = channel.fromPath("${params.output_folder}/mutect2/calls/*vcf", type: 'file')
+            .map { vcf ->
+                def sample_id = vcf.baseName
+                    .replaceAll("_filtered","")
+                tuple(sample_id, vcf, 'mutect2')
+            }
+
+        strelka_vcfs = channel.fromPath("${params.output_folder}/strelka2/calls/*vcf.gz", type: 'file')
+            .map { vcf ->
+                def sample_id = vcf.baseName
+                    .replaceAll(".indels","")
+                    .replaceAll(".snvs","")
+                    .replaceAll(".vcf","")
+                tuple(sample_id, vcf, 'strelka2')
+            }
+
+        dupcaller_vcfs = channel.fromPath("${params.output_folder}/dupcaller/calls/*/*vcf", type: 'file')
+            .map { vcf ->
+            def sample_id = vcf.parent.name
+                tuple(sample_id, vcf, 'dupcaller')
+            }
+
+        all_vcfs = mutect_vcfs.mix(strelka_vcfs).mix(dupcaller_vcfs)
+
+        dupcaller_trinuc = channel.fromPath("${params.output_folder}/dupcaller/calls/*/*trinuc_by_duplex_group.txt", type: 'file')
+            .map { trinuc ->
+            def sample_id = trinuc.parent.name
+                tuple(sample_id, trinuc, 'dupcaller')
+            }
+
+    }
+
+    //ANNOTATIONS
+    if(params.annovarDBlist) {
+        all_vcfs.view()
+        dupcaller_trinuc.view()
+        ANNOTATIONS(all_vcfs, ref, indexes, dupcaller_trinuc)
+    }
 
 }
 
@@ -523,28 +577,37 @@ workflow CALLING {
 
     // Collect all VCF files from different callers into one channel
     all_vcfs = Channel.empty()
+    trinuc = Channel.empty()
 
     // Run DUPCALLER if UMI mode is enabled
     if (params.umi) {
         mask = params.mask ? (file(params.mask)) : (file("NO_BED"))
         DUPCALLER_CALL(pairs, ref, indexes, known_sites, mask)
         all_vcfs = all_vcfs.mix(DUPCALLER_CALL.out.vcfs)
+        trinuc=DUPCALLER_CALL.out.trinuc 
     }
 
     // Run Strelka2 if enabled
     if(params.strelka2) {
+        //pairs = pairs.filter { sample_id, tumor_bam, tumor_bai, normal_bam -> normal_bam.name != "germline" } // germline mode not implemented yet for strelka2
         STRELKA2_CALL(pairs, ref, indexes, bed)
         all_vcfs = all_vcfs.mix(STRELKA2_CALL.out.vcfs)
     }
 
     // Run Mutect2 if enabled
     if(params.mutect2) {
+        //pairs = pairs.filter { sample_id, tumor_bam, tumor_bai, normal_bam -> normal_bam.name != "germline" } // mutect2 is only somatic
         MUTECT2_CALL(pairs, ref, indexes, bed, known_sites)
         all_vcfs = all_vcfs.mix(MUTECT2_CALL.out.vcfs)
     }
 
+    emit:
+    all_vcfs = all_vcfs
+    trinuc=trinuc
+    
+
     // Run annotation once with all VCFs
-    if(params.annovarDBlist) {
+    /*if(params.annovarDBlist) {
         filtered_vcf = ANNOTATION(all_vcfs)
 
         if(params.umi) {
@@ -570,9 +633,52 @@ workflow CALLING {
             DUPCALLER_ESTIMATE(sit, ref, indexes)
         }
 
+    }*/
+
+}
+
+/*
+========================================================================================
+    CALLING ANNOTATIONS
+========================================================================================
+*/
+workflow ANNOTATIONS {
+    
+    take:
+    all_vcfs
+    ref
+    indexes
+    trinuc
+
+    main:
+
+    filtered_vcf = ANNOTATION(all_vcfs, ref)
+
+    if(params.umi) {
+        // Filter for dupcaller VCFs using caller tag
+        dupcaller_vcfs = filtered_vcf.filter { it[2] == 'dupcaller' }
+            .map { sample_id, files, _caller_tag ->tuple(sample_id, files)}
+
+        // Prepare input for DUPCALLER_ESTIMATE
+        sit = dupcaller_vcfs
+            .concat(trinuc)
+            .groupTuple(by: 0)
+            .map { sample_id, files ->
+                def snv_vcf = files.find { it.name.contains('_snv') }
+                def indel_vcf = files.find { it.name.contains('_indel') }
+                def trinuc_file = files.find { it.name.contains('trinuc') }
+                   tuple(sample_id, snv_vcf, indel_vcf, trinuc_file)
+            }//.filter { it[2] != null }
+                
+        sit.view()
+                
+        // Reestimate duplication rates
+        DUPCALLER_ESTIMATE(sit, ref, indexes)
     }
 
 }
+
+
 
 
 workflow.onComplete {

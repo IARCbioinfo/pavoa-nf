@@ -220,7 +220,7 @@ nextflow run iarcbioinfo/pavoa-nf -profile apptainer \
 To run only the calling from a previous analysis located in pavoa_output folder.
 
 ```bash
-nextflow run IARCbioinfo/pavoa-nf -entry dupcaller -profile apptainer \
+nextflow run IARCbioinfo/pavoa-nf -profile apptainer \
   --input_file input.txt \
   --output_folder pavoa_output
   --ref hg38.fasta \
@@ -245,7 +245,7 @@ nextflow run IARCbioinfo/pavoa-nf -entry dupcaller -profile apptainer \
 | mutect2/raw_calls/ | unflagged vcf |
 | mutect2/stats | info files from mutect calling |
 | strelka2/   | Strelka2 outputs |
-| strelka2/CallablRegions | Callable regions (bed) |
+| strelka2/CallableRegions | Callable regions (bed) |
 | dupcaller/ | Dupcaller outputs |
 | */calls/ | final vcf |
 | */calls/annovar/ | raw annovar annotations |
@@ -341,6 +341,8 @@ Please also cite the individual tools used by the pipeline.
 | Name | Email | Description |
 |------|-------|-------------|
 | Cahais Vincent* | cahaisv@iarc.who.int | Developer to contact for support |
+| Nicolas Alcala | | Developer |
+| Tiffany Delhomme | | Developer |
 
 ## References
 
