@@ -184,7 +184,7 @@ process dupCallerCall{
         def germline = known_sites.findAll { it.name.endsWith('.vcf.gz') }.collect { "-g ${it}" }.join(' ')
         def noise_mask = (bed.baseName=="NO_BED") ? "" : "-m " + bed.join(" -m ")
         def chromosome = ref.name.find('chr21') ? " -r chr21 " : ""
-        chromosome = ref.name.find('mm') ? " -r chr{1..19} chrX, chrY " : chromosome
+        chromosome = ref.name.find('mm') ? " -r chr{1..19} chrX chrY " : chromosome
         def mode = bamN.baseName == 'germline' ? '--maxAF 0.1' : '-n ' + bamN
         """
         export MPLCONFIGDIR="$mplDir"
@@ -260,7 +260,7 @@ process DUPCALLER_ESTIMATE{
     script:
         def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
         chromosome = ref.name.find('chr21') ? " -r chr21 " : chromosome
-        chromosome = ref.name.find('mm') ? " -r chr{1..19} chrX, chrY " : chromosome
+        chromosome = ref.name.find('mm') ? " -r chr{1..19} chrX chrY " : chromosome
 
         """
         mkdir -p "${file_tag}"
