@@ -259,11 +259,21 @@ process DUPCALLER_ESTIMATE{
 
     script:
         def chromosome = (params.chromosome) ? "-r ${params.chromosome}" : ""
-        chromosome = ref.name.find('chr21') ? " -r chr21 " : ""
+        chromosome = ref.name.find('chr21') ? " -r chr21 " : chromosome
 
         """
         mkdir -p "${file_tag}"
         mv ${file_tag}_* ${file_tag}/.
+
+        SNV_FILE="${file_tag}/${file_tag}_snv.vcf"
+
+        # Vérifie que le fichier existe et contient au moins une variante
+        if [ ! -s "\$SNV_FILE" ] || ! grep -qv '^#' "\$SNV_FILE"; then
+            echo "SNV VCF is empty — skipping DupCaller"
+            touch "${file_tag}/${file_tag}.empty"
+            exit 0
+        fi
+
         DupCaller.py estimate -i ${file_tag} -f $ref ${chromosome}
         """
 
